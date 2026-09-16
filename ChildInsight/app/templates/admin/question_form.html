@@ -1,0 +1,92 @@
+{% extends "base_admin.html" %}
+
+{% block title %}{{ title }} — {{ activity.title }} — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+            <a href="{{ url_for('admin.activity_questions', activity_id=activity.id) }}" style="color: var(--color-primary); text-decoration: none; font-size: 0.85rem;">
+                &larr; Back to Questions for {{ activity.title }}
+            </a>
+        </div>
+        <h1>{{ title }}</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">
+            Activity: <strong>{{ activity.title }}</strong> &bull; Category: <strong>{{ activity.category.name }}</strong>
+        </p>
+    </div>
+    <div>
+        <a href="{{ url_for('admin.activity_questions', activity_id=activity.id) }}" class="btn btn-outline btn-sm">Cancel</a>
+    </div>
+</div>
+
+<div class="card" style="max-width: 680px; margin: 0 auto;">
+    <form method="POST" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+            {{ form.question_text.label(class="form-label") }}
+            {{ form.question_text(class="form-control" + (" is-invalid" if form.question_text.errors else ""), rows="3", placeholder="e.g. Which shape comes next in this pattern? 🔴 🔵 🔴 🔵 ...") }}
+            {% for error in form.question_text.errors %}
+                <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div class="grid-2" style="margin-bottom: 1.25rem;">
+            <div class="form-group" style="margin: 0;">
+                {{ form.question_type.label(class="form-label") }}
+                {{ form.question_type(class="form-control" + (" is-invalid" if form.question_type.errors else "")) }}
+                {% for error in form.question_type.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group" style="margin: 0;">
+                {{ form.order_num.label(class="form-label") }}
+                {{ form.order_num(class="form-control" + (" is-invalid" if form.order_num.errors else "")) }}
+                {% for error in form.order_num.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+            {{ form.options.label(class="form-label") }}
+            {{ form.options(class="form-control" + (" is-invalid" if form.options.errors else ""), rows="4", placeholder="Option A\nOption B\nOption C\nOption D") }}
+            {% for error in form.options.errors %}
+                <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+            {% endfor %}
+            <small style="display: block; color: var(--color-text-muted); margin-top: 0.25rem;">
+                Enter each choice on its own separate line. At least 2 options are required.
+            </small>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+            {{ form.correct_answer.label(class="form-label") }}
+            {{ form.correct_answer(class="form-control" + (" is-invalid" if form.correct_answer.errors else ""), placeholder="Must exactly match one of the choices above") }}
+            {% for error in form.correct_answer.errors %}
+                <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+            {% endfor %}
+            <small style="display: block; color: var(--color-text-muted); margin-top: 0.25rem;">
+                Case-sensitive string matching the correct choice.
+            </small>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.75rem;">
+            {{ form.hint.label(class="form-label") }}
+            {{ form.hint(class="form-control" + (" is-invalid" if form.hint.errors else ""), placeholder="e.g. Look at the colors alternating!") }}
+            {% for error in form.hint.errors %}
+                <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+            {% endfor %}
+            <small style="display: block; color: var(--color-text-muted); margin-top: 0.25rem;">
+                Gentle, encouraging guidance shown if the child requests a hint during play.
+            </small>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; align-items: center;">
+            {{ form.submit(class="btn btn-primary") }}
+            <a href="{{ url_for('admin.activity_questions', activity_id=activity.id) }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

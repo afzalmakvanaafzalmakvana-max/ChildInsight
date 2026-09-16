@@ -1,0 +1,89 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Activity Categories — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1>Activity Categories</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">Configure cognitive learning domains, view activity distributions, and manage categories.</p>
+    </div>
+    <div>
+        <a href="{{ url_for('admin.category_create') }}" class="btn btn-primary btn-sm">➕ Add Category</a>
+    </div>
+</div>
+
+<div class="card table-responsive-container" style="padding: 0;">
+    {% if categories %}
+    <table class="admin-data-table">
+        <thead>
+            <tr>
+                <th class="col-sticky" style="min-width: 220px;">Category</th>
+                <th>Slug</th>
+                <th>Description</th>
+                <th style="text-align: center;">Linked Activities</th>
+                <th style="text-align: right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cat in categories %}
+                {% set act_count = cat.activities.count() %}
+                <tr>
+                    <td class="col-sticky" style="min-width: 220px; max-width: 320px;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <span style="font-size: 1.5rem; line-height: 1;">{{ cat.icon or '📂' }}</span>
+                            <div>
+                                <strong class="admin-table-title" title="{{ cat.name }}">{{ cat.name }}</strong>
+                                <span style="color: var(--color-text-muted); font-size: 0.8rem;">ID: #{{ cat.id }}</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <code style="background: var(--color-bg); padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.85rem; border: 1px solid var(--color-border);">{{ cat.slug }}</code>
+                    </td>
+                    <td style="color: var(--color-text-muted); max-width: 320px; word-break: break-word;">
+                        {{ cat.description or '—' }}
+                    </td>
+                    <td style="text-align: center;">
+                        {% if act_count > 0 %}
+                            <span class="brand-badge badge-primary" style="font-weight: 600;">
+                                {{ act_count }} activit{{ 'y' if act_count == 1 else 'ies' }}
+                            </span>
+                        {% else %}
+                            <span class="brand-badge badge-neutral">
+                                0 activities
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right; white-space: nowrap;">
+                        <a href="{{ url_for('admin.category_edit', category_id=cat.id) }}" class="btn btn-outline btn-sm" style="margin-right: 0.5rem;">Edit</a>
+                        
+                        <form method="POST" action="{{ url_for('admin.category_delete', category_id=cat.id) }}" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to delete category \'{{ cat.name }}\'? This action cannot be undone.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            {% if act_count > 0 %}
+                                <button type="submit" class="btn btn-outline btn-sm" style="color: var(--color-text-muted); border-color: var(--color-border);" title="Deletion blocked: {{ act_count }} activities linked">
+                                    Delete
+                                </button>
+                            {% else %}
+                                <button type="submit" class="btn btn-outline btn-sm" style="color: var(--color-danger); border-color: #FECACA;">
+                                    Delete
+                                </button>
+                            {% endif %}
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <div style="text-align: center; padding: 3rem 1.5rem;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📂</div>
+            <h3 style="margin-bottom: 0.5rem;">No categories found</h3>
+            <p style="color: var(--color-text-muted); max-width: 440px; margin: 0 auto 1.5rem;">
+                No activity categories currently exist. You can create one to begin organizing educational activities.
+            </p>
+            <a href="{{ url_for('admin.category_create') }}" class="btn btn-primary btn-sm">Add First Category</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

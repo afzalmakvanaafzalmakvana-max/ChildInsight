@@ -1,0 +1,213 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Adaptive Content Suggestions — ChildInsight Admin{% endblock %}
+
+{% block content %}
+<div class="dashboard-header" style="margin-bottom: 1.5rem;">
+    <div>
+        <h1>Adaptive Content Suggestions</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">
+            Data-backed content gap detection based on learner demographics and category engagement. All suggestions require human review.
+        </p>
+    </div>
+    <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <form method="POST" action="{{ url_for('admin.content_suggestions_run') }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary btn-sm">
+                🔍 Run Gap Analysis Now
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Ethical & Non-Automated Transparency Notice -->
+<div class="card" style="background: var(--color-surface); border-left: 4px solid var(--color-primary); margin-bottom: 2rem; padding: 1rem 1.25rem;">
+    <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+        <span style="font-size: 1.5rem;">💡</span>
+        <div>
+            <strong style="color: var(--color-text-main); font-size: 0.95rem;">Human-in-the-Loop Content Generation</strong>
+            <p style="margin: 0.25rem 0 0; font-size: 0.88rem; color: var(--color-text-muted); line-height: 1.4;">
+                The Content Suggestion Agent detects progression bottlenecks, age band voids, and domain imbalances based on active learner data.
+                It <strong>never</strong> auto-publishes content. Administrators review each suggestion and author the actual pedagogical questions using the pre-filled forms.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Metric Cards -->
+<div class="grid-3" style="margin-bottom: 2rem;">
+    <div class="stat-card">
+        <div class="stat-label">Pending Suggestions</div>
+        <div class="stat-value" style="color: var(--color-warning);">{{ pending_count }}</div>
+        <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0.25rem 0 0;">Awaiting administrative review</p>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Approved &amp; Created</div>
+        <div class="stat-value" style="color: var(--color-success);">{{ approved_count }}</div>
+        <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0.25rem 0 0;">Fulfilled by administrators</p>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Dismissed</div>
+        <div class="stat-value" style="color: var(--color-text-muted);">{{ dismissed_count }}</div>
+        <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0.25rem 0 0;">Archived without action</p>
+    </div>
+</div>
+
+<!-- Filter Tabs -->
+<div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.5rem;">
+    <a href="{{ url_for('admin.content_suggestions', status='all') }}"
+       class="btn btn-sm {% if current_status == 'all' %}btn-primary{% else %}btn-outline{% endif %}">
+        All ({{ total_count }})
+    </a>
+    <a href="{{ url_for('admin.content_suggestions', status='pending') }}"
+       class="btn btn-sm {% if current_status == 'pending' %}btn-primary{% else %}btn-outline{% endif %}">
+        Pending ({{ pending_count }})
+    </a>
+    <a href="{{ url_for('admin.content_suggestions', status='approved') }}"
+       class="btn btn-sm {% if current_status == 'approved' %}btn-primary{% else %}btn-outline{% endif %}">
+        Approved ({{ approved_count }})
+    </a>
+    <a href="{{ url_for('admin.content_suggestions', status='dismissed') }}"
+       class="btn btn-sm {% if current_status == 'dismissed' %}btn-primary{% else %}btn-outline{% endif %}">
+        Dismissed ({{ dismissed_count }})
+    </a>
+</div>
+
+<!-- Suggestions List -->
+{% if suggestions %}
+    <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+        {% for s in suggestions %}
+            <div class="card" style="padding: 1.5rem; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 280px;">
+                        <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap;">
+                            <!-- Type Badge -->
+                            {% if s.suggestion_type == 'progression_gap' %}
+                                <span class="badge badge-warning">⚡️ Progression Bottleneck</span>
+                            {% elif s.suggestion_type == 'age_coverage_gap' %}
+                                <span class="badge badge-primary">👶 Age Coverage Gap</span>
+                            {% elif s.suggestion_type == 'content_imbalance' %}
+                                <span class="badge badge-purple">⚖️ Content Imbalance</span>
+                            {% elif s.suggestion_type == 'new_category' %}
+                                <span class="badge badge-success">🌟 Domain Expansion</span>
+                            {% else %}
+                                <span class="badge badge-neutral">{{ s.suggestion_type }}</span>
+                            {% endif %}
+
+                            <!-- Category Badge -->
+                            {% if s.category %}
+                                <span class="badge badge-neutral">
+                                    {{ s.category.icon }} {{ s.category.name }}
+                                </span>
+                            {% endif %}
+
+                            <!-- Age Band Badge -->
+                            {% if s.age_band %}
+                                <span class="badge badge-neutral">
+                                    Ages {{ s.age_band }}
+                                </span>
+                            {% endif %}
+
+                            <!-- Target Difficulty Badge -->
+                            {% if s.target_difficulty %}
+                                <span class="badge badge-neutral">
+                                    Difficulty: {{ s.target_difficulty }}
+                                </span>
+                            {% endif %}
+
+                            <!-- Priority Urgency Badge -->
+                            <span class="badge {% if (s.priority_score or 0.0) >= 30.0 %}badge-danger{% elif (s.priority_score or 0.0) >= 15.0 %}badge-warning{% else %}badge-primary{% endif %}">
+                                ⚡️ Priority: {{ "%.1f"|format(s.priority_score or 0.0) }}
+                            </span>
+
+                            <!-- Persistence Badge -->
+                            <span class="badge badge-neutral">
+                                🔄 Persisted: {{ s.persistence_count or 1 }} run{% if (s.persistence_count or 1) > 1 %}s{% endif %}
+                            </span>
+
+                            <!-- Status Badge -->
+                            {% if s.status == 'pending' %}
+                                <span class="badge badge-warning">Pending Review</span>
+                            {% elif s.status == 'approved' %}
+                                <span class="badge badge-success">Approved</span>
+                            {% elif s.status == 'dismissed' %}
+                                <span class="badge badge-neutral">Dismissed</span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Suggested Title -->
+                        {% if s.suggested_title %}
+                            <h3 style="margin: 0.5rem 0 0.35rem; font-size: 1.15rem; color: var(--color-text-main);">
+                                {{ s.suggested_title }}
+                            </h3>
+                        {% endif %}
+
+                        <!-- Data-Backed Reason -->
+                        <p style="margin: 0.5rem 0 0.5rem; font-size: 0.95rem; color: var(--color-text-main); line-height: 1.5;">
+                            {{ s.reason }}
+                        </p>
+
+                        <div style="font-size: 0.8rem; color: var(--color-text-muted);">
+                            Detected on {{ s.created_at.strftime('%B %d, %Y at %H:%M UTC') }}
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                        {% if s.status == 'pending' %}
+                            {% if s.suggestion_type == 'new_category' %}
+                                <a href="{{ url_for('admin.category_create', name=s.suggested_title, suggestion_id=s.id) }}"
+                                   class="btn btn-primary btn-sm">
+                                    📂 Create Category &rarr;
+                                </a>
+                            {% else %}
+                                <a href="{{ url_for('admin.activity_ai_draft_form', suggestion_id=s.id, category_id=s.category_id, age_band=s.age_band, difficulty=s.target_difficulty) }}"
+                                   class="btn btn-outline btn-sm" style="border-color: var(--color-primary); color: var(--color-primary);">
+                                    🤖 Draft with AI &rarr;
+                                </a>
+                                <a href="{{ url_for('admin.activity_create', category_id=s.category_id, age_band=s.age_band, difficulty=s.target_difficulty, title=s.suggested_title, suggestion_id=s.id) }}"
+                                   class="btn btn-primary btn-sm">
+                                    ✨ Create Activity &rarr;
+                                </a>
+                            {% endif %}
+
+                            <form method="POST" action="{{ url_for('admin.content_suggestion_dismiss', suggestion_id=s.id) }}" style="display: inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-outline btn-sm" onclick="return confirm('Dismiss this suggestion?');">
+                                    Dismiss
+                                </button>
+                            </form>
+                        {% elif s.status == 'approved' %}
+                            <span style="font-size: 0.85rem; color: #059669; font-weight: 500;">
+                                ✓ Fulfilled
+                            </span>
+                        {% else %}
+                            <span style="font-size: 0.85rem; color: var(--color-text-muted); font-style: italic;">
+                                Dismissed
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">🎉</div>
+        <h3 class="empty-state-title">No Content Suggestions</h3>
+        <p class="empty-state-text">
+            {% if current_status == 'pending' %}
+                All educational content gaps are currently resolved or reviewed! Run a fresh analysis to evaluate recent learner activity.
+            {% else %}
+                No suggestions match the selected '{{ current_status }}' filter.
+            {% endif %}
+        </p>
+        <form method="POST" action="{{ url_for('admin.content_suggestions_run') }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline btn-sm">
+                Run Gap Analysis
+            </button>
+        </form>
+    </div>
+{% endif %}
+{% endblock %}

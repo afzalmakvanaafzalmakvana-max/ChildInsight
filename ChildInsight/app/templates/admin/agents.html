@@ -1,0 +1,411 @@
+{% extends "base_admin.html" %}
+
+{% block title %}System Agents & Platform Health — ChildInsight{% endblock %}
+
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+.agent-step-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.85rem;
+    border-radius: 8px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    margin-bottom: 0.5rem;
+    font-size: 0.88rem;
+}
+.agent-badge-pill {
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.agent-badge-success { background: #DCFCE7; color: #14532D; border: 1px solid #86EFAC; }
+.agent-badge-failure { background: #FEE2E2; color: #7F1D1D; border: 1px solid #FECACA; }
+.agent-badge-skipped { background: #FEF3C7; color: #78350F; border: 1px solid #FCD34D; }
+.agent-badge-running { background: #EFF6FF; color: #1E40AF; border: 1px solid #BFDBFE; }
+.agent-badge-idle { background: #F1F5F9; color: #1E293B; border: 1px solid #CBD5E1; }
+
+.severity-high { background: #FEE2E2; color: #7F1D1D; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; border: 1px solid #FECACA; }
+.severity-medium { background: #FEF3C7; color: #78350F; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; border: 1px solid #FCD34D; }
+.severity-low { background: #EEF2FF; color: #3730A3; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; border: 1px solid #C7D2FE; }
+
+[data-theme="dark"] .agent-badge-success { background: rgba(16, 185, 129, 0.2) !important; color: #6EE7B7 !important; border-color: rgba(16, 185, 129, 0.4) !important; }
+[data-theme="dark"] .agent-badge-failure { background: rgba(239, 68, 68, 0.2) !important; color: #FECACA !important; border-color: rgba(239, 68, 68, 0.4) !important; }
+[data-theme="dark"] .agent-badge-skipped { background: rgba(245, 158, 11, 0.2) !important; color: #FDE68A !important; border-color: rgba(245, 158, 11, 0.4) !important; }
+[data-theme="dark"] .agent-badge-running { background: rgba(59, 130, 246, 0.2) !important; color: #93C5FD !important; border-color: rgba(59, 130, 246, 0.4) !important; }
+[data-theme="dark"] .agent-badge-idle { background: #334155 !important; color: #F8FAFC !important; border-color: #475569 !important; }
+[data-theme="dark"] .severity-high { background: rgba(239, 68, 68, 0.2) !important; color: #FECACA !important; border-color: rgba(239, 68, 68, 0.4) !important; }
+[data-theme="dark"] .severity-medium { background: rgba(245, 158, 11, 0.2) !important; color: #FDE68A !important; border-color: rgba(245, 158, 11, 0.4) !important; }
+[data-theme="dark"] .severity-low { background: rgba(99, 102, 241, 0.2) !important; color: #C7D2FE !important; border-color: rgba(99, 102, 241, 0.4) !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem;">
+    <div>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <h1>🤖 System Agents & Platform Health</h1>
+            <span class="agent-badge-pill agent-badge-success">Automated Monitoring</span>
+        </div>
+        <p style="color: var(--color-text-muted); margin: 0.25rem 0 0;">
+            Deterministic rule-based monitors, content verification agents, and scheduled ML maintenance pipelines.
+        </p>
+    </div>
+    <div>
+        <form method="POST" action="{{ url_for('admin.run_agents_pipeline') }}" style="display: inline;" onsubmit="return confirm('Execute the automated maintenance agent pipeline now?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" class="btn btn-primary" style="display: flex; align-items: center; gap: 0.5rem;" {% if last_run.is_running %}disabled{% endif %}>
+                <span>⚡</span>
+                <span>{% if last_run.is_running %}Pipeline Running...{% else %}Run Maintenance Pipeline{% endif %}</span>
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Grid Row: Health Score & Trend & Scheduler State -->
+<div style="display: grid; grid-template-columns: 320px 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+    <!-- Health Score Card -->
+    <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 style="margin: 0;">Platform Health</h3>
+                <span style="font-size: 0.8rem; color: var(--color-text-muted);">Scale 0–100</span>
+            </div>
+
+            <div style="text-align: center; padding: 1.25rem 0;">
+                <div style="font-size: 3.5rem; font-weight: 800; line-height: 1; color: {% if health_metrics.score >= 85 %}#16A34A{% elif health_metrics.score >= 60 %}#D97706{% else %}#DC2626{% endif %};">
+                    {{ health_metrics.score }}
+                </div>
+                <div style="font-size: 0.9rem; font-weight: 600; color: var(--color-text-muted); margin-top: 0.5rem;">
+                    {% if health_metrics.score >= 85 %}
+                        Healthy System Posture
+                    {% elif health_metrics.score >= 60 %}
+                        Moderate Operational Health
+                    {% else %}
+                        Attention Required
+                    {% endif %}
+                </div>
+            </div>
+
+            <div style="border-top: 1px solid var(--color-border); padding-top: 1rem; font-size: 0.85rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+                    <span style="color: var(--color-text-muted);">Session Completion:</span>
+                    <strong>{{ health_metrics.completion_rate }}%</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+                    <span style="color: var(--color-text-muted);">Valid Activity Content:</span>
+                    <strong>{{ health_metrics.valid_activities_pct }}%</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+                    <span style="color: var(--color-text-muted);">Learner Recommendation Rate:</span>
+                    <strong>{{ health_metrics.children_with_rec_pct }}%</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
+                    <span style="color: var(--color-text-muted);">Compliance Incidents (24h):</span>
+                    <strong style="color: {% if health_metrics.compliance_incidents_count > 0 %}#DC2626{% else %}#16A34A{% endif %};">
+                        {{ health_metrics.compliance_incidents_count }}
+                    </strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--color-text-muted);">Integrity Issues:</span>
+                    <strong style="color: {% if health_metrics.integrity_issues_count > 0 %}#D97706{% else %}#16A34A{% endif %};">
+                        {{ health_metrics.integrity_issues_count }}
+                    </strong>
+                </div>
+            </div>
+        </div>
+
+        <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 1rem; border-top: 1px solid var(--color-border); padding-top: 0.75rem;">
+            Base score: {{ health_metrics.details.base_score }} • Deductions: -{{ health_metrics.details.compliance_penalty + health_metrics.details.integrity_penalty }}
+        </div>
+    </div>
+
+    <!-- Health Trend Chart -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="margin: 0;">Platform Health Trend</h3>
+            <span style="font-size: 0.8rem; color: var(--color-text-muted);">Recorded snapshots over time</span>
+        </div>
+        <div style="height: 240px; position: relative;">
+            <canvas id="healthTrendChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Developmental Age-Band Breakdown: Health & Content Gaps -->
+<div class="card" style="margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
+        <div>
+            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                <span>📊</span>
+                <span>Developmental Age-Band Health & Content Breakdown</span>
+            </h3>
+            <p style="color: var(--color-text-muted); font-size: 0.88rem; margin: 0.25rem 0 0;">
+                Granular health telemetry and content gap detection broken down across the 4 developmental age cohorts.
+            </p>
+        </div>
+        <div>
+            <span class="brand-badge badge-primary">4 Age Bands Monitored</span>
+        </div>
+    </div>
+
+    <div style="overflow-x: auto;">
+        <table class="table" style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--color-border); text-align: left;">
+                    <th style="padding: 0.75rem 1rem; color: var(--color-text-muted); font-weight: 600;">Age Band</th>
+                    <th style="padding: 0.75rem 1rem; color: var(--color-text-muted); font-weight: 600;">Health Score</th>
+                    <th style="padding: 0.75rem 1rem; color: var(--color-text-muted); font-weight: 600;">Session Completion</th>
+                    <th style="padding: 0.75rem 1rem; color: var(--color-text-muted); font-weight: 600;">Content Adequacy</th>
+                    <th style="padding: 0.75rem 1rem; color: var(--color-text-muted); font-weight: 600;">Active Learners</th>
+                    <th style="padding: 0.75rem 1rem; color: var(--color-text-muted); font-weight: 600;">Detected Content Gaps</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for band in health_metrics.age_band_breakdown %}
+                <tr style="border-bottom: 1px solid var(--color-border);">
+                    <td style="padding: 0.85rem 1rem;">
+                        <strong style="color: var(--color-text-main); font-size: 0.95rem;">Ages {{ band.age_band }}</strong>
+                        <div style="font-size: 0.8rem; color: var(--color-text-muted); margin-top: 0.15rem;">{{ band.name }}</div>
+                    </td>
+                    <td style="padding: 0.85rem 1rem;">
+                        <span class="badge {% if band.score >= 85 %}badge-success{% elif band.score >= 60 %}badge-warning{% else %}badge-danger{% endif %}" style="font-size: 0.85rem; padding: 0.25rem 0.65rem;">
+                            {{ band.score }} / 100
+                        </span>
+                    </td>
+                    <td style="padding: 0.85rem 1rem;">
+                        <div style="font-weight: 600; color: var(--color-text-main);">{{ band.completion_rate }}%</div>
+                        <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">
+                            {{ band.completed_sessions }}/{{ band.total_sessions }} completed
+                        </span>
+                    </td>
+                    <td style="padding: 0.85rem 1rem;">
+                        <div style="font-weight: 600; color: var(--color-text-main);">{{ band.content_adequacy }}%</div>
+                        <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">
+                            {{ band.valid_activities }}/{{ band.total_activities }} valid activities
+                        </span>
+                    </td>
+                    <td style="padding: 0.85rem 1rem;">
+                        <div style="font-weight: 600; color: var(--color-text-main);">{{ band.total_children }}</div>
+                        <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block;">enrolled</span>
+                    </td>
+                    <td style="padding: 0.85rem 1rem;">
+                        {% if band.content_gaps %}
+                            <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                                {% for gap in band.content_gaps %}
+                                <a href="{{ url_for('admin.content_suggestions') }}" class="badge badge-warning" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.3rem; max-width: fit-content;" title="{{ gap.reason }}">
+                                    <span>⚠️</span>
+                                    <span>{{ gap.title }}</span>
+                                </a>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <span class="badge badge-success" style="display: inline-flex; align-items: center; gap: 0.3rem;">
+                                <span>✓</span>
+                                <span>Adequate Coverage</span>
+                            </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+<!-- Scheduler & Execution State -->
+<div class="card" style="margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
+        <div>
+            <h3 style="margin: 0;">Scheduled Background Maintenance Runner</h3>
+            <p style="color: var(--color-text-muted); font-size: 0.88rem; margin: 0.25rem 0 0;">
+                Sequential, fault-isolated maintenance pipeline ensuring models, recommendations, and metrics stay synchronized.
+            </p>
+        </div>
+        <div style="display: flex; gap: 0.75rem; align-items: center;">
+            <span style="font-size: 0.85rem; color: var(--color-text-muted);">
+                Last Run: <strong>{{ last_run.last_run_time or 'No run recorded yet' }}</strong>
+            </span>
+            <span class="agent-badge-pill {% if last_run.status == 'success' %}agent-badge-success{% elif last_run.status == 'partial_failure' %}agent-badge-failure{% elif last_run.status == 'running' %}agent-badge-running{% else %}agent-badge-idle{% endif %}">
+                {{ last_run.status }}
+            </span>
+        </div>
+    </div>
+
+    {% if last_run.steps %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0.75rem;">
+            {% for step in last_run.steps %}
+            <div class="agent-step-item">
+                <div style="display: flex; flex-direction: column;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <strong>{{ step.name }}</strong>
+                        <span style="font-size: 0.75rem; color: var(--color-text-muted);">({{ step.duration }}s)</span>
+                    </div>
+                    <span style="font-size: 0.8rem; color: var(--color-text-muted); margin-top: 0.15rem;">{{ step.message }}</span>
+                </div>
+                <div>
+                    <span class="agent-badge-pill {% if step.status == 'success' %}agent-badge-success{% elif step.status == 'failure' %}agent-badge-failure{% elif step.status == 'skipped' %}agent-badge-skipped{% else %}agent-badge-idle{% endif %}">
+                        {{ step.status }}
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div style="padding: 1.5rem; text-align: center; color: var(--color-text-muted); background: var(--color-bg); border-radius: 8px; border: 1px dashed var(--color-border);">
+            No background pipeline run recorded yet in this session. Click <strong>Run Maintenance Pipeline</strong> above to initiate.
+        </div>
+    {% endif %}
+</div>
+
+<!-- Two Column Layout: Content Integrity & Compliance Telemetry -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+    <!-- Content Integrity Agent Audit -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div>
+                <h3 style="margin: 0;">Content Integrity Audit</h3>
+                <p style="color: var(--color-text-muted); font-size: 0.85rem; margin: 0.2rem 0 0;">
+                    Audits zero-question activities, empty categories, orphaned questions, and bound anomalies.
+                </p>
+            </div>
+            <span class="agent-badge-pill {% if integrity_issues %}agent-badge-failure{% else %}agent-badge-success{% endif %}">
+                {{ integrity_issues|length }} Issues
+            </span>
+        </div>
+
+        {% if integrity_issues %}
+            <div style="max-height: 320px; overflow-y: auto;">
+                {% for issue in integrity_issues %}
+                <div style="padding: 0.75rem; border: 1px solid var(--color-border); border-radius: 6px; margin-bottom: 0.5rem; background: var(--color-bg);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                        <strong style="font-size: 0.88rem;">{{ issue.affected_record }}</strong>
+                        <span class="severity-{{ issue.severity }}">{{ issue.severity }}</span>
+                    </div>
+                    <div style="font-size: 0.82rem; color: var(--color-text-muted); margin-bottom: 0.25rem;">
+                        {{ issue.description }}
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--color-primary); font-weight: 500;">
+                        Fix: {{ issue.suggested_fix }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div style="padding: 2rem; text-align: center; color: #16A34A; background: #F0FDF4; border-radius: 8px; border: 1px solid #DCFCE7;">
+                <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">✓</div>
+                <strong>Content Catalog Fully Verified</strong>
+                <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: #15803D;">All activities have questions, categories are active, and age/difficulty bounds are strictly valid.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Safety & Compliance Agent Telemetry -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div>
+                <h3 style="margin: 0;">Safety & Compliance Telemetry</h3>
+                <p style="color: var(--color-text-muted); font-size: 0.85rem; margin: 0.2rem 0 0;">
+                    Monitors diagnostic/clinical vocabulary blacklist enforcement across recommendations and alerts.
+                </p>
+            </div>
+            <span class="agent-badge-pill {% if recent_incidents_count > 0 %}agent-badge-failure{% else %}agent-badge-success{% endif %}">
+                {{ recent_incidents_count }} Intercepted (24h)
+            </span>
+        </div>
+
+        <div style="padding: 0.6rem 0.85rem; background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 6px; font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: 1rem;">
+            🔒 <strong>Privacy Safeguard:</strong> Raw intercepted text is logged exclusively to the server rotating log. Only matched rule names and timestamps are displayed here to prevent sensitive data re-exposure.
+        </div>
+
+        {% if recent_incidents %}
+            <div style="max-height: 250px; overflow-y: auto;">
+                {% for inc in recent_incidents %}
+                <div style="padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--color-border); font-size: 0.85rem;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <strong style="color: #DC2626;">{{ inc.rule_matched }}</strong>
+                        <span style="font-size: 0.75rem; color: var(--color-text-muted);">{{ inc.timestamp }}</span>
+                    </div>
+                    <div style="font-size: 0.78rem; color: var(--color-text-muted); margin-top: 0.2rem;">
+                        Source: <code>{{ inc.source }}</code> • Action: Blocked and replaced with safe educational fallback
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div style="padding: 2rem; text-align: center; color: #16A34A; background: #F0FDF4; border-radius: 8px; border: 1px solid #DCFCE7;">
+                <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">✓</div>
+                <strong>Zero Compliance Incidents</strong>
+                <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: #15803D;">All generated recommendation reasons, notifications, and reports strictly adhere to PRD §4 non-diagnostic language.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Architecture & Ethical Disclosure Banner -->
+<div style="padding: 1rem 1.25rem; border-radius: 8px; background: #F1F5F9; border: 1px solid #CBD5E1; font-size: 0.85rem; color: #475569; display: flex; align-items: flex-start; gap: 0.75rem;">
+    <span style="font-size: 1.2rem;">ℹ️</span>
+    <div>
+        <strong>System Architecture & Transparency Note:</strong>
+        ChildInsight's internal agents are deterministic rule-based monitors, schema validators, and scheduled scikit-learn ML pipelines working in coordination. They perform data verification, ethical vocabulary enforcement, and background aggregation. They do not constitute general artificial intelligence (AGI) or self-aware agents.
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var ctx = document.getElementById('healthTrendChart');
+    if (!ctx) return;
+
+    var labels = {{ trend_labels_json|safe }};
+    var data = {{ trend_scores_json|safe }};
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Health Score (0-100)',
+                data: data,
+                borderColor: '#2563EB',
+                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                borderWidth: 2,
+                tension: 0.3,
+                fill: true,
+                pointRadius: 4,
+                pointBackgroundColor: '#2563EB'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    min: 0,
+                    max: 100,
+                    ticks: { stepSize: 20 }
+                },
+                x: {
+                    grid: { display: false }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return ' Health Score: ' + context.parsed.y + ' / 100';
+                        }
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

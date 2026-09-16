@@ -1,0 +1,90 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Questions: {{ activity.title }} — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+            <a href="{{ url_for('admin.activities_list') }}" style="color: var(--color-primary); text-decoration: none; font-size: 0.85rem;">&larr; All Activities</a>
+            <span style="color: var(--color-text-muted);">/</span>
+            <span style="color: var(--color-text-muted); font-size: 0.85rem;">{{ activity.category.icon }} {{ activity.category.name }}</span>
+        </div>
+        <h1>Questions: {{ activity.title }}</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">
+            Difficulty: <strong>{{ activity.difficulty }}</strong> &bull; Target Ages: <strong>{{ activity.age_band }}</strong> &bull; Status: <strong>{{ 'Active' if activity.is_active else 'Inactive' }}</strong>
+        </p>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+        <a href="{{ url_for('admin.question_create', activity_id=activity.id) }}" class="btn btn-primary btn-sm">➕ Add Question</a>
+        <a href="{{ url_for('admin.activity_edit', activity_id=activity.id) }}" class="btn btn-outline btn-sm">Edit Activity</a>
+    </div>
+</div>
+
+<div class="card table-responsive-container" style="padding: 0;">
+    {% if questions %}
+    <table class="admin-data-table">
+        <thead>
+            <tr>
+                <th class="col-sticky" style="min-width: 240px;"># &amp; Question Prompt</th>
+                <th>Type</th>
+                <th>Options &amp; Correct Answer</th>
+                <th>Hint</th>
+                <th style="text-align: right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for q in questions %}
+                <tr>
+                    <td class="col-sticky" style="min-width: 240px; max-width: 360px;">
+                        <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+                            <span style="font-weight: bold; color: var(--color-text-muted); font-size: 0.85rem;">#{{ q.order_num }}</span>
+                            <strong class="admin-table-title" title="{{ q.question_text }}">{{ q.question_text }}</strong>
+                        </div>
+                    </td>
+                    <td style="white-space: nowrap;">
+                        <span class="brand-badge badge-neutral" style="font-size: 0.8rem;">
+                            {{ q.question_type.replace('_', ' ').title() }}
+                        </span>
+                    </td>
+                    <td style="max-width: 320px;">
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center;">
+                            {% for opt in q.options %}
+                                {% if opt == q.correct_answer %}
+                                    <span class="brand-badge badge-success" style="font-weight: 600;" title="Correct Answer">
+                                        ✓ {{ opt }}
+                                    </span>
+                                {% else %}
+                                    <span class="brand-badge badge-neutral">
+                                        {{ opt }}
+                                    </span>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td style="color: var(--color-text-muted); font-size: 0.85rem; max-width: 200px;">
+                        {{ q.hint or '—' }}
+                    </td>
+                    <td style="text-align: right; white-space: nowrap;">
+                        <a href="{{ url_for('admin.question_edit', activity_id=activity.id, question_id=q.id) }}" class="btn btn-outline btn-sm" style="margin-right: 0.35rem;">Edit</a>
+                        <form method="POST" action="{{ url_for('admin.question_delete', activity_id=activity.id, question_id=q.id) }}" style="display: inline-block;" onsubmit="return confirm('Delete question #{{ q.order_num }}?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-outline btn-sm" style="color: var(--color-danger); border-color: #FECACA;">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <div style="text-align: center; padding: 3rem 1.5rem;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">❓</div>
+            <h3 style="margin-bottom: 0.5rem;">No questions added yet</h3>
+            <p style="color: var(--color-text-muted); max-width: 440px; margin: 0 auto 1.5rem;">
+                This activity does not have any questions yet. Add questions so learners can play and earn cognitive progress.
+            </p>
+            <a href="{{ url_for('admin.question_create', activity_id=activity.id) }}" class="btn btn-primary btn-sm">Add First Question</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

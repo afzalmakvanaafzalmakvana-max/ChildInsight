@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Teacher Portal — ChildInsight{% endblock %}
+
+{% block navbar %}
+<nav class="navbar">
+    <div class="container navbar-inner">
+        <a href="{{ url_for('teacher.dashboard') }}" class="brand">
+            <span>🌱 ChildInsight</span>
+            <span class="brand-badge badge-warning">Teacher Portal</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="{{ url_for('teacher.dashboard') }}" class="nav-link{% if request.endpoint == 'teacher.dashboard' %} active{% endif %}">Overview</a></li>
+            <li><a href="{{ url_for('teacher.students_list') }}" class="nav-link{% if request.endpoint in ['teacher.students_list', 'teacher.student_profile'] %} active{% endif %}">Assigned Students</a></li>
+            <li><a href="{{ url_for('teacher.activity_assignments') }}" class="nav-link{% if request.endpoint == 'teacher.activity_assignments' %} active{% endif %}">Activity Assignments</a></li>
+        </ul>
+        <div class="nav-actions">
+            {% include 'components/theme_toggle.html' %}
+            {% include 'components/notification_bell.html' %}
+            <span class="nav-user-label" title="{{ current_user.name }}">
+                {{ current_user.name }}
+            </span>
+            <a href="{{ url_for('auth.logout') }}" class="btn btn-outline btn-sm">Sign Out</a>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1>Educator Workspace</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">Support your students through individual progress tracking and personalized activity guidance.</p>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Assigned Learners</div>
+        <div class="stat-value">{{ students|length if students else 0 }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Active Assignments</div>
+        <div class="stat-value">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Observation Reports</div>
+        <div class="stat-value">Ready</div>
+    </div>
+</div>
+
+<div class="card">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+        <h2>Assigned Students</h2>
+        <a href="{{ url_for('teacher.students_list') }}" class="btn btn-outline btn-sm">View All &rarr;</a>
+    </div>
+    {% if students %}
+        <div class="grid-3" style="margin: 1rem 0 0 0;">
+            {% for student in students %}
+                <div style="background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1.25rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <strong style="font-size: 1.1rem;">{{ student.name }}</strong>
+                        <span class="brand-badge">{{ student.grade or 'Grade N/A' }}</span>
+                    </div>
+                    <p style="color: var(--color-text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+                        Parent: {{ student.parent.name if student.parent else 'N/A' }}
+                    </p>
+                    <a href="{{ url_for('teacher.student_detail', child_id=student.id) }}" class="btn btn-primary btn-sm" style="width: 100%;">Individual Profile</a>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p style="color: var(--color-text-muted);">No students are currently assigned to your classroom.</p>
+    {% endif %}
+</div>
+{% endblock %}

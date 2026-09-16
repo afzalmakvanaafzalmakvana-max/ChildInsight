@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Bad Request — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="card" style="padding: 3rem 2rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-md);">
+        <div style="font-size: 3rem; margin-bottom: 0.5rem;">⚠️</div>
+        <div class="error-code" style="color: var(--color-warning);">400</div>
+        <h1 class="error-title">Bad Request</h1>
+        <p class="error-message">The request could not be processed due to invalid parameters or formatting. Please verify your submission and try again.</p>
+        <div style="display: flex; gap: 0.75rem; justify-content: center;">
+            <a href="javascript:history.back()" class="btn btn-outline">Go Back</a>
+            <a href="{{ url_for('auth.index') }}" class="btn btn-primary">Return to Homepage</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

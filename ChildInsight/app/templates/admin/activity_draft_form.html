@@ -1,0 +1,131 @@
+{% extends "base_admin.html" %}
+
+{% block title %}AI Content Drafting — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header" style="margin-bottom: 1.5rem;">
+    <div>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <h1>🤖 AI Content Drafting</h1>
+            <span class="badge badge-purple">Human-in-the-Loop</span>
+        </div>
+        <p style="color: var(--color-text-muted); margin: 0.25rem 0 0;">
+            Generate grounded educational activities informed by real platform style, developmental calibration, and detected curriculum gaps.
+        </p>
+    </div>
+    <div>
+        <a href="{{ url_for('admin.activities_list') }}" class="btn btn-outline btn-sm">&larr; Back to Activities</a>
+    </div>
+</div>
+
+{% if suggestion %}
+<div class="card" style="margin-bottom: 1.5rem; border-left: 4px solid var(--color-primary); background: rgba(47, 111, 237, 0.04);">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+        <div>
+            <span class="badge badge-info" style="margin-bottom: 0.5rem;">💡 Linked Content Suggestion #{{ suggestion.id }}</span>
+            <h3 style="margin: 0.25rem 0 0.5rem; font-size: 1.15rem;">
+                {{ suggestion.suggested_title or 'Curriculum Gap Recommendation' }}
+            </h3>
+            <p style="margin: 0; color: var(--color-text-main); font-size: 0.95rem; line-height: 1.5;">
+                {{ suggestion.reason }}
+            </p>
+        </div>
+        <div>
+            {% if suggestion.age_band %}
+                <span class="badge badge-neutral">Ages {{ suggestion.age_band }}</span>
+            {% endif %}
+            {% if suggestion.target_difficulty %}
+                <span class="badge badge-neutral">Difficulty: {{ suggestion.target_difficulty }}</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card" style="max-width: 760px; margin: 0 auto; padding: 2rem;">
+    <form method="POST" action="{{ url_for('admin.activity_ai_draft_generate') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% if suggestion %}
+            <input type="hidden" name="suggestion_id" value="{{ suggestion.id }}">
+        {% endif %}
+
+        <!-- Category -->
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+            <label for="category_id" class="form-label" style="font-weight: 600;">
+                Target Cognitive Category <span style="color: #DC2626;">*</span>
+            </label>
+            <select id="category_id" name="category_id" class="form-control" required style="font-size: 0.95rem;">
+                {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if selected_category_id == cat.id %}selected{% endif %}>
+                        {{ cat.icon }} {{ cat.name }} ({{ cat.slug }})
+                    </option>
+                {% endfor %}
+            </select>
+            <small style="color: var(--color-text-muted); display: block; margin-top: 0.35rem;">
+                The agent will analyze existing activities in this category to mirror its playful tone and question styling.
+            </small>
+        </div>
+
+        <div class="grid-2" style="gap: 1.5rem; margin-bottom: 1.5rem;">
+            <!-- Age Band -->
+            <div class="form-group">
+                <label for="age_band" class="form-label" style="font-weight: 600;">
+                    Target Developmental Age Band <span style="color: #DC2626;">*</span>
+                </label>
+                <select id="age_band" name="age_band" class="form-control" required style="font-size: 0.95rem;">
+                    <option value="4-6" {% if selected_age_band == '4-6' %}selected{% endif %}>Ages 4-6 (Early Childhood / Pre-K)</option>
+                    <option value="6-9" {% if selected_age_band == '6-9' %}selected{% endif %}>Ages 6-9 (Early Elementary)</option>
+                    <option value="9-12" {% if selected_age_band == '9-12' %}selected{% endif %}>Ages 9-12 (Upper Elementary)</option>
+                    <option value="12-14" {% if selected_age_band == '12-14' %}selected{% endif %}>Ages 12-14 (Early Secondary)</option>
+                </select>
+                <small style="color: var(--color-text-muted); display: block; margin-top: 0.35rem;">
+                    Grounded in cross-category activities for developmental vocabulary and cognitive calibration.
+                </small>
+            </div>
+
+            <!-- Difficulty -->
+            <div class="form-group">
+                <label for="difficulty" class="form-label" style="font-weight: 600;">
+                    Target Difficulty Level <span style="color: #DC2626;">*</span>
+                </label>
+                <select id="difficulty" name="difficulty" class="form-control" required style="font-size: 0.95rem;">
+                    <option value="Beginner" {% if selected_difficulty == 'Beginner' %}selected{% endif %}>Beginner</option>
+                    <option value="Easy" {% if selected_difficulty == 'Easy' %}selected{% endif %}>Easy</option>
+                    <option value="Medium" {% if selected_difficulty == 'Medium' %}selected{% endif %}>Medium</option>
+                    <option value="Advanced" {% if selected_difficulty == 'Advanced' %}selected{% endif %}>Advanced</option>
+                </select>
+                <small style="color: var(--color-text-muted); display: block; margin-top: 0.35rem;">
+                    Calibrated according to the 3-layer recommendation engine difficulty progression.
+                </small>
+            </div>
+        </div>
+
+        <!-- Custom Focus / Guidance -->
+        <div class="form-group" style="margin-bottom: 2rem;">
+            <label for="custom_guidance" class="form-label" style="font-weight: 600;">
+                Optional Theme / Pedagogical Focus
+            </label>
+            <textarea id="custom_guidance" name="custom_guidance" class="form-control" rows="3"
+                      placeholder="e.g. Focus on spatial geometry and hidden shapes, or a safari animal adventure mystery..."></textarea>
+            <small style="color: var(--color-text-muted); display: block; margin-top: 0.35rem;">
+                Provide optional thematic guidance. The agent will weave this topic into the playful game scenario.
+            </small>
+        </div>
+
+        <!-- Safety Notice -->
+        <div style="background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.75rem; font-size: 0.85rem; color: var(--color-text-muted);">
+            <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; color: var(--color-text-main); margin-bottom: 0.25rem;">
+                🛡️ Human-in-the-Loop & PRD §4 Ethical Safeguards
+            </div>
+            Draft generation applies the Compliance Agent blacklist to eliminate clinical/diagnostic phrasing. Generating a draft does <strong>not</strong> save anything to the database until you review, edit, and approve it.
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <a href="{{ url_for('admin.activities_list') }}" class="btn btn-outline">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+                ✨ Generate Activity Draft
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

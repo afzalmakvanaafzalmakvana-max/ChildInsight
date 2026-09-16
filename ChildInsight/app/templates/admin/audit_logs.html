@@ -1,0 +1,121 @@
+{% extends "base_admin.html" %}
+
+{% block title %}System Audit Logs — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1>System Audit Logs</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">Trace administrative operations, user role modifications, and educator assignment events.</p>
+    </div>
+    <div style="display: flex; gap: 0.5rem;">
+        <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline btn-sm">&larr; Back to Dashboard</a>
+    </div>
+</div>
+
+<!-- Search & Filter Controls -->
+<div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
+    <form method="GET" action="{{ url_for('admin.audit_logs') }}" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+        <div style="flex: 1; min-width: 220px;">
+            <label for="search-input" class="form-label" style="font-size: 0.85rem;">Search Actor / Entity</label>
+            <input type="text" id="search-input" name="q" value="{{ current_q or '' }}" class="form-control" placeholder="Search by name, email, action, or target...">
+        </div>
+
+        <div style="min-width: 200px;">
+            <label for="action-select" class="form-label" style="font-size: 0.85rem;">Filter by Action</label>
+            <select id="action-select" name="action" class="form-control">
+                <option value="">-- All Logged Actions --</option>
+                {% for act in distinct_actions %}
+                    <option value="{{ act }}" {% if current_action == act %}selected{% endif %}>{{ act }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem;">
+            <button type="submit" class="btn btn-primary btn-sm" style="height: 42px;">Filter Logs</button>
+            {% if current_q or current_action %}
+                <a href="{{ url_for('admin.audit_logs') }}" class="btn btn-outline btn-sm" style="height: 42px; display: flex; align-items: center;">Clear</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<!-- Audit Log Table -->
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 style="margin: 0;">Logged Events</h2>
+        <span class="brand-badge badge-neutral">{{ logs|length }} Entries</span>
+    </div>
+
+    {% if logs %}
+        <div class="table-responsive-container">
+            <table class="admin-data-table">
+                <thead>
+                    <tr>
+                        <th class="col-sticky" style="min-width: 170px;">Timestamp</th>
+                        <th style="min-width: 190px;">Actor</th>
+                        <th>Action</th>
+                        <th>Target Entity</th>
+                        <th>Target ID</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l in logs %}
+                        <tr>
+                            <td class="col-sticky" style="min-width: 170px; color: var(--color-text-muted); font-size: 0.85rem; white-space: nowrap;">
+                                {{ l.timestamp.strftime('%b %d, %Y %H:%M:%S UTC') if l.timestamp else 'N/A' }}
+                            </td>
+                            <td style="min-width: 190px; font-weight: 500;">
+                                {% if l.user %}
+                                    <span class="admin-table-title" title="{{ l.user.name }}">{{ l.user.name }}</span>
+                                    <div style="font-size: 0.8rem; color: var(--color-text-muted); font-weight: 400; word-break: break-all;" title="{{ l.user.email }}">{{ l.user.email }}</div>
+                                {% else %}
+                                    <span style="color: var(--color-text-muted);">System / Deleted User (ID: {{ l.user_id }})</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set act_lower = l.action|lower %}
+                                {% if 'run' in act_lower %}
+                                    <span class="brand-badge badge-run">{{ l.action }}</span>
+                                {% elif 'reset' in act_lower %}
+                                    <span class="brand-badge badge-reset">{{ l.action }}</span>
+                                {% elif 'create' in act_lower or 'add' in act_lower %}
+                                    <span class="brand-badge badge-create">{{ l.action }}</span>
+                                {% elif 'delete' in act_lower or 'remove' in act_lower or 'dismiss' in act_lower %}
+                                    <span class="brand-badge badge-delete">{{ l.action }}</span>
+                                {% elif 'role' in act_lower %}
+                                    <span class="brand-badge badge-purple">{{ l.action }}</span>
+                                {% elif 'update' in act_lower or 'toggle' in act_lower or 'edit' in act_lower %}
+                                    <span class="brand-badge badge-update">{{ l.action }}</span>
+                                {% elif 'assign' in act_lower %}
+                                    <span class="brand-badge badge-assign">{{ l.action }}</span>
+                                {% else %}
+                                    <span class="brand-badge badge-neutral">{{ l.action }}</span>
+                                {% endif %}
+                            </td>
+                            <td style="color: var(--color-text-muted);">
+                                <code>{{ l.target_type or '—' }}</code>
+                            </td>
+                            <td style="color: var(--color-text-muted); font-family: monospace;">
+                                {{ l.target_id or '—' }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 3rem 1.5rem;">
+            <div style="font-size: 3rem; margin-bottom: 0.5rem;">📜</div>
+            <h3 style="margin-bottom: 0.5rem;">No administrative actions recorded yet</h3>
+            <p style="color: var(--color-text-muted); max-width: 460px; margin: 0 auto;">
+                {% if current_q or current_action %}
+                    No audit records matched your search criteria. Try clearing filters to see all operations.
+                {% else %}
+                    System activities such as role changes, user status toggles, and teacher assignments will be chronologically tracked here.
+                {% endif %}
+            </p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

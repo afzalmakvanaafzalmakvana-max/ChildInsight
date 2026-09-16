@@ -1,0 +1,119 @@
+{% extends "base_admin.html" %}
+
+{% block title %}User Management — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1>User Management</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">View all registered users, toggle active status, and manage roles.</p>
+    </div>
+</div>
+
+<!-- Search & Filter Controls -->
+<div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
+    <form method="GET" action="{{ url_for('admin.users_list') }}" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+        <div style="flex: 1; min-width: 220px;">
+            <label for="user-search" class="form-label" style="font-size: 0.85rem;">Search Users</label>
+            <input type="text" id="user-search" name="q" value="{{ current_q or '' }}" class="form-control" placeholder="Search by name or email address...">
+        </div>
+
+        <div style="min-width: 160px;">
+            <label for="role-filter" class="form-label" style="font-size: 0.85rem;">Role</label>
+            <select id="role-filter" name="role" class="form-control">
+                <option value="">-- All Roles --</option>
+                <option value="parent" {% if current_role == 'parent' %}selected{% endif %}>Parent</option>
+                <option value="teacher" {% if current_role == 'teacher' %}selected{% endif %}>Teacher</option>
+                <option value="admin" {% if current_role == 'admin' %}selected{% endif %}>Admin</option>
+            </select>
+        </div>
+
+        <div style="min-width: 160px;">
+            <label for="status-filter" class="form-label" style="font-size: 0.85rem;">Status</label>
+            <select id="status-filter" name="status" class="form-control">
+                <option value="">-- All Statuses --</option>
+                <option value="active" {% if current_status == 'active' %}selected{% endif %}>Active</option>
+                <option value="inactive" {% if current_status == 'inactive' %}selected{% endif %}>Inactive</option>
+            </select>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem;">
+            <button type="submit" class="btn btn-primary btn-sm" style="height: 42px;">Filter</button>
+            {% if current_q or current_role or current_status %}
+                <a href="{{ url_for('admin.users_list') }}" class="btn btn-outline btn-sm" style="height: 42px; display: flex; align-items: center;">Clear</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<div class="card table-responsive-container" style="padding: 0;">
+    {% if users %}
+    <table class="admin-data-table">
+        <thead>
+            <tr>
+                <th class="col-sticky" style="min-width: 240px;">User &amp; Email</th>
+                <th>Current Role</th>
+                <th>Status</th>
+                <th>Registered</th>
+                <th style="text-align: right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+                <tr>
+                    <td class="col-sticky" style="min-width: 240px; max-width: 340px;">
+                        <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+                            <strong class="admin-table-title" title="{{ u.name }}">{{ u.name }}</strong>
+                            <span style="color: var(--color-text-muted); font-size: 0.8rem; font-family: monospace;">#{{ u.id }}</span>
+                        </div>
+                        <span style="color: var(--color-text-muted); font-size: 0.85rem; display: block; word-break: break-all;" title="{{ u.email }}">{{ u.email }}</span>
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('admin.user_change_role', user_id=u.id) }}" style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select name="role" class="form-control" style="padding: 0.35rem 0.5rem; font-size: 0.85rem; width: auto;" onchange="this.form.submit()">
+                                <option value="parent" {% if u.role == 'parent' %}selected{% endif %}>Parent</option>
+                                <option value="teacher" {% if u.role == 'teacher' %}selected{% endif %}>Teacher</option>
+                                <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>Admin</option>
+                            </select>
+                        </form>
+                    </td>
+                    <td>
+                        {% if u.is_active %}
+                            <span class="brand-badge badge-success">Active</span>
+                        {% else %}
+                            <span class="brand-badge badge-danger">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td style="color: var(--color-text-muted); font-size: 0.85rem;">
+                        {{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '—' }}
+                    </td>
+                    <td style="text-align: right; white-space: nowrap;">
+                        {% if u.id != current_user.id %}
+                            <form method="POST" action="{{ url_for('admin.user_toggle_status', user_id=u.id) }}" style="display: inline-block;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                {% if u.is_active %}
+                                    <button type="submit" class="btn btn-outline btn-sm" style="color: var(--color-danger); border-color: #FECACA;">Deactivate</button>
+                                {% else %}
+                                    <button type="submit" class="btn btn-outline btn-sm" style="color: var(--color-success); border-color: #A7F3D0;">Activate</button>
+                                {% endif %}
+                            </form>
+                        {% else %}
+                            <span style="font-size: 0.85rem; color: var(--color-text-muted);">Current User</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <div style="text-align: center; padding: 3rem 1.5rem;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">👥</div>
+            <h3 style="margin-bottom: 0.5rem;">No users found</h3>
+            <p style="color: var(--color-text-muted); max-width: 440px; margin: 0 auto;">
+                No user accounts matched your search and filter criteria. Try clearing or broadening your search parameters.
+            </p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

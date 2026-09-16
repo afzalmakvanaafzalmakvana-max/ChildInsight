@@ -1,0 +1,136 @@
+{% extends "base_teacher.html" %}
+
+{% block title %}Educator Workspace — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1>Educator Workspace</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">Support individual learner growth, observe engagement profiles, and assign tailored activities.</p>
+    </div>
+</div>
+
+{% if pending_requests %}
+<div class="card" id="access-requests" style="margin-bottom: 2rem; border-left: 4px solid var(--color-primary); background: var(--color-surface);">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+        <h2 style="margin: 0; font-size: 1.25rem; display: flex; align-items: center; gap: 0.5rem;">
+            <span>📬</span> Pending Student Access Requests
+        </h2>
+        <span class="brand-badge" style="background: #FEF3C7; color: #92400E;">{{ pending_requests|length }} Awaiting Response</span>
+    </div>
+    <p style="color: var(--color-text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+        Parents have requested to share their child's learning reports and progress observations with you. Accept to add them to your classroom roster.
+    </p>
+
+    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        {% for req in pending_requests %}
+            <div style="padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <div style="font-weight: 600; font-size: 1.05rem;">
+                        Parent {{ req.parent.name if req.parent else 'A parent' }} has requested you view {{ req.child.name }}'s report
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--color-text-muted); margin-top: 0.25rem;">
+                        Student: <strong>{{ req.child.name }}</strong> ({{ req.child.age or 'Age N/A' }} yo, {{ req.child.grade or 'Grade N/A' }}) &bull; Received {{ req.created_at.strftime('%b %d, %Y') }}
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <form method="POST" action="{{ url_for('teacher.accept_access_request', access_id=req.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-primary btn-sm">Accept</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('teacher.decline_access_request', access_id=req.id) }}" onsubmit="return confirm('Decline access request for {{ req.child.name }}?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline btn-sm">Decline</button>
+                    </form>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# Class-Wide Summary (Strictly Aggregate Stats Only) #}
+<div class="stats-grid" style="margin-bottom: 2rem;">
+    <div class="stat-card">
+        <div class="stat-label">Assigned Students</div>
+        <div class="stat-value">{{ class_summary.total_students }}</div>
+        <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0.25rem 0 0;">Active individual learners</p>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Class Activities Completed</div>
+        <div class="stat-value">{{ class_summary.total_completed_sessions }}</div>
+        <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0.25rem 0 0;">Total learning sessions finished</p>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Average Class Engagement</div>
+        <div class="stat-value">{{ class_summary.average_engagement }} <span style="font-size: 1rem; color: var(--color-text-muted);">/ 100</span></div>
+        <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0.25rem 0 0;">Multi-signal participation index</p>
+    </div>
+</div>
+
+{# Individual Student Progress Roster #}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+            <h2 style="margin: 0;">Student Learning Overview</h2>
+            <p style="color: var(--color-text-muted); font-size: 0.85rem; margin: 0.25rem 0 0;">
+                Focus on individual development pathways. Every student progresses along their own supportive journey.
+            </p>
+        </div>
+        <span class="brand-badge" style="background: #F3F4F6; color: var(--color-text-muted);">{{ students|length }} Students</span>
+    </div>
+
+    {% if students %}
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
+                <thead>
+                    <tr style="border-bottom: 2px solid var(--color-border); color: var(--color-text-muted); font-size: 0.85rem; text-transform: uppercase;">
+                        <th style="padding: 0.75rem 1rem;">Student Name</th>
+                        <th style="padding: 0.75rem 1rem;">Stage / Grade</th>
+                        <th style="padding: 0.75rem 1rem;">Individual Progress Status</th>
+                        <th style="padding: 0.75rem 1rem;">Completed Activities</th>
+                        <th style="padding: 0.75rem 1rem; text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in students %}
+                        <tr style="border-bottom: 1px solid var(--color-border);">
+                            <td style="padding: 1rem; font-weight: 600;">
+                                👦 {{ item.child.name | replace(' [Demo Data]', '') }}
+                                {% if '[Demo Data]' in item.child.name %}
+                                    <span class="brand-badge" style="background: #FEF3C7; color: #92400E; font-size: 0.7rem; vertical-align: middle;">Demo</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 1rem; color: var(--color-text-muted);">
+                                {{ item.learning_stage }}
+                            </td>
+                            <td style="padding: 1rem;">
+                                <span class="brand-badge {{ item.status.badge_class }}" style="font-weight: 600; font-size: 0.85rem; padding: 0.35rem 0.75rem;">
+                                    {{ item.status.label }}
+                                </span>
+                                <span style="font-size: 0.8rem; color: var(--color-text-muted); margin-left: 0.5rem;">
+                                    {{ item.status.note }}
+                                </span>
+                            </td>
+                            <td style="padding: 1rem; color: var(--color-text-muted);">
+                                {{ item.sessions_count }} sessions
+                            </td>
+                            <td style="padding: 1rem; text-align: right;">
+                                <a href="{{ url_for('teacher.student_detail', child_id=item.child.id) }}" class="btn btn-outline btn-sm">View Profile &rarr;</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state" style="margin: 1rem 0 0; border: none;">
+            <div class="empty-state-icon">📚</div>
+            <h3 class="empty-state-title">No students assigned yet</h3>
+            <p class="empty-state-text">
+                Platform administrators assign students to educators. Once students are paired with your account, their individual learning profiles will appear here.
+            </p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

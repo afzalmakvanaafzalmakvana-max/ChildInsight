@@ -1,0 +1,334 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Review AI Activity Draft — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header" style="margin-bottom: 1.5rem;">
+    <div>
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <h1>Review AI Generated Activity Draft</h1>
+            <span class="badge badge-warning">Unsaved Draft</span>
+            <span class="badge badge-purple">Human-in-the-Loop</span>
+        </div>
+        <p style="color: var(--color-text-muted); margin: 0.25rem 0 0;">
+            Inspect, edit, and refine the AI draft. Nothing is committed to the platform catalog until you click <strong>Approve & Publish</strong>.
+        </p>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+        <a href="{{ url_for('admin.activities_list') }}" class="btn btn-outline btn-sm" onclick="return confirm('Discard this unsaved draft? Any changes will be lost.');">
+            🗑️ Discard Draft
+        </a>
+    </div>
+</div>
+
+<!-- Grounding Transparency / Platform Context Used Banner -->
+<div class="card" style="margin-bottom: 2rem; border-left: 4px solid var(--color-primary); background: rgba(47, 111, 237, 0.04); padding: 1.25rem 1.5rem;">
+    <h3 style="font-size: 1.05rem; margin: 0 0 0.75rem; display: flex; align-items: center; gap: 0.5rem; color: var(--color-primary);">
+        <span>🔍 Platform Grounding & Context Used</span>
+    </h3>
+    <div class="grid-2" style="gap: 1.25rem; font-size: 0.88rem;">
+        <div>
+            <strong>🎨 Style & Tone Grounding:</strong>
+            <p style="margin: 0.25rem 0 0.5rem; color: var(--color-text-muted);">
+                Matched playful adventure tone and question structure from existing activities in <em>{{ draft.category_name }}</em>:
+            </p>
+            {% if draft.platform_context and draft.platform_context.matched_tone_titles %}
+                <ul style="margin: 0; padding-left: 1.25rem; color: var(--color-text-main);">
+                    {% for title in draft.platform_context.matched_tone_titles %}
+                        <li>{{ title }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <span style="color: var(--color-text-muted);">Baseline category pedagogy</span>
+            {% endif %}
+        </div>
+
+        <div>
+            <strong>🎯 Age Calibration (Ages {{ draft.min_age }}-{{ draft.max_age }}):</strong>
+            <p style="margin: 0.25rem 0 0.5rem; color: var(--color-text-muted);">
+                Calibrated against platform difficulty benchmarks for this age group:
+            </p>
+            {% if draft.platform_context and draft.platform_context.calibration_titles %}
+                <ul style="margin: 0; padding-left: 1.25rem; color: var(--color-text-main);">
+                    {% for item in draft.platform_context.calibration_titles %}
+                        <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <span style="color: var(--color-text-muted);">Standard developmental scale</span>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if draft.platform_context and draft.platform_context.addressed_gap_reason %}
+        <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px dashed var(--color-border); font-size: 0.88rem;">
+            <strong>💡 Addressing Curriculum Gap:</strong>
+            <span style="color: var(--color-text-main); margin-left: 0.35rem;">{{ draft.platform_context.addressed_gap_reason }}</span>
+        </div>
+    {% endif %}
+
+    <div style="margin-top: 0.75rem; font-size: 0.8rem; color: #059669; display: flex; align-items: center; gap: 0.4rem;">
+        <span>🛡️ Dual-Layer Compliance Verification:</span>
+        <span>PRD §4 blacklist constraints passed & verified through Safety Agent.</span>
+    </div>
+</div>
+
+<!-- Inline Editable Review Form -->
+<form id="draftReviewForm" method="POST" action="{{ url_for('admin.activity_ai_draft_publish') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if draft.suggestion_id %}
+        <input type="hidden" name="suggestion_id" value="{{ draft.suggestion_id }}">
+    {% endif %}
+    <input type="hidden" id="questionsJsonInput" name="questions_json" value="">
+
+    <!-- Activity Metadata Card -->
+    <div class="card" style="margin-bottom: 2rem; padding: 1.75rem;">
+        <h2 style="font-size: 1.2rem; margin-bottom: 1.25rem; color: var(--color-text-main);">
+            Activity Details (Editable)
+        </h2>
+
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label for="activity-title" class="form-label" style="font-weight: 600;">
+                Activity Title <span style="color: #DC2626;">*</span>
+            </label>
+            <input type="text" id="activity-title" name="title" class="form-control" value="{{ draft.title }}" required style="font-size: 1.1rem; font-weight: 600;">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label for="activity-desc" class="form-label" style="font-weight: 600;">
+                Scenario Description
+            </label>
+            <textarea id="activity-desc" name="description" class="form-control" rows="2">{{ draft.description }}</textarea>
+            <small style="color: var(--color-text-muted);">Set the playful, adventure-style scene for learners.</small>
+        </div>
+
+        <div class="grid-4" style="gap: 1rem;">
+            <div class="form-group">
+                <label for="activity-cat" class="form-label" style="font-weight: 600;">Category</label>
+                <select id="activity-cat" name="category_id" class="form-control" required>
+                    {% for cat in categories %}
+                        <option value="{{ cat.id }}" {% if cat.id == draft.category_id %}selected{% endif %}>
+                            {{ cat.icon }} {{ cat.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="activity-diff" class="form-label" style="font-weight: 600;">Difficulty</label>
+                <select id="activity-diff" name="difficulty" class="form-control" required>
+                    {% for diff in ['Beginner', 'Easy', 'Medium', 'Advanced'] %}
+                        <option value="{{ diff }}" {% if diff == draft.difficulty %}selected{% endif %}>{{ diff }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" style="font-weight: 600;">Target Ages</label>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <input type="number" name="min_age" class="form-control" value="{{ draft.min_age }}" min="4" max="14" style="width: 70px;" required>
+                    <span>to</span>
+                    <input type="number" name="max_age" class="form-control" value="{{ draft.max_age }}" min="4" max="14" style="width: 70px;" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="activity-duration" class="form-label" style="font-weight: 600;">Est. Minutes</label>
+                <input type="number" id="activity-duration" name="estimated_duration" class="form-control" value="{{ draft.estimated_duration }}" min="1" max="60" required>
+            </div>
+        </div>
+    </div>
+
+    <!-- Questions List Section -->
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+        <h2 style="font-size: 1.25rem; margin: 0; color: var(--color-text-main);">
+            Questions ({{ draft.questions|length }})
+        </h2>
+        <button type="button" id="btnAddQuestion" class="btn btn-outline btn-sm">
+            ➕ Add Question
+        </button>
+    </div>
+
+    <div id="questionsContainer">
+        {% for q in draft.questions %}
+            {% set q_idx = loop.index0 %}
+            <div class="card question-card" data-index="{{ q_idx }}" style="margin-bottom: 1.25rem; padding: 1.5rem; border-top: 3px solid var(--color-primary);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <span class="badge badge-primary question-number-badge">Question #{{ loop.index }}</span>
+                    <button type="button" class="btn btn-outline btn-sm btn-remove-q" style="color: #DC2626; border-color: #FECACA;" onclick="removeQuestion(this);">
+                        ✕ Remove
+                    </button>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label class="form-label" style="font-weight: 600;">Question Prompt <span style="color: #DC2626;">*</span></label>
+                    <input type="text" class="form-control q-text-input" name="q_text_{{ q_idx }}" value="{{ q.question_text }}" required style="font-size: 1rem;">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label class="form-label" style="font-weight: 600;">Answer Options & Correct Answer</label>
+                    <small style="display: block; color: var(--color-text-muted); margin-bottom: 0.5rem;">Select the radio button next to the correct answer choice.</small>
+
+                    <div class="options-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        {% for opt in q.options %}
+                            {% set opt_idx = loop.index0 %}
+                            <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--color-bg); padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
+                                <input type="radio" id="q_correct_{{ q_idx }}_{{ opt_idx }}" name="q_correct_choice_{{ q_idx }}" value="{{ opt_idx }}"
+                                       {% if opt == q.correct_answer or (loop.first and q.correct_answer not in q.options) %}checked{% endif %}
+                                       style="width: 18px; height: 18px; cursor: pointer;">
+                                <input type="text" class="form-control q-opt-input" name="q_opt_{{ q_idx }}_{{ opt_idx }}" value="{{ opt }}" placeholder="Option {{ loop.index }}" required style="font-size: 0.9rem;">
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Gentle Hint / Scaffolding Clue (Optional)</label>
+                    <input type="text" class="form-control q-hint-input" name="q_hint_{{ q_idx }}" value="{{ q.hint or '' }}" placeholder="Supportive hint to encourage thinking without giving away the answer.">
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- Actions Toolbar Sticky Footer -->
+    <div class="card" style="margin-top: 2rem; padding: 1.25rem 1.75rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; border-top: 2px solid var(--color-border);">
+        <div style="font-size: 0.9rem; color: var(--color-text-muted);">
+            Once approved, the activity and all questions will be active in the catalog.
+        </div>
+        <div style="display: flex; gap: 0.75rem;">
+            <a href="{{ url_for('admin.activities_list') }}" class="btn btn-outline" onclick="return confirm('Discard this unsaved draft?');">
+                Discard
+            </a>
+            <button type="submit" class="btn btn-primary" style="background-color: #10B981; border-color: #10B981; font-weight: 700; padding: 0.65rem 1.75rem;">
+                ✅ Approve & Publish
+            </button>
+        </div>
+    </div>
+</form>
+
+<script>
+let questionCounter = {{ draft.questions|length }};
+
+function removeQuestion(btn) {
+    const card = btn.closest('.question-card');
+    const container = document.getElementById('questionsContainer');
+    if (container.querySelectorAll('.question-card').length <= 1) {
+        alert('An activity must contain at least 1 question.');
+        return;
+    }
+    card.remove();
+    reindexQuestions();
+}
+
+function reindexQuestions() {
+    const cards = document.querySelectorAll('.question-card');
+    cards.forEach((card, idx) => {
+        card.setAttribute('data-index', idx);
+        const badge = card.querySelector('.question-number-badge');
+        if (badge) badge.textContent = `Question #${idx + 1}`;
+
+        const textInput = card.querySelector('.q-text-input');
+        if (textInput) textInput.name = `q_text_${idx}`;
+
+        const hintInput = card.querySelector('.q-hint-input');
+        if (hintInput) hintInput.name = `q_hint_${idx}`;
+
+        const optInputs = card.querySelectorAll('.q-opt-input');
+        optInputs.forEach((optInput, optIdx) => {
+            optInput.name = `q_opt_${idx}_${optIdx}`;
+        });
+
+        const radios = card.querySelectorAll('input[type="radio"]');
+        radios.forEach((radio, optIdx) => {
+            radio.name = `q_correct_choice_${idx}`;
+            radio.id = `q_correct_${idx}_${optIdx}`;
+        });
+    });
+}
+
+document.getElementById('btnAddQuestion').addEventListener('click', () => {
+    const container = document.getElementById('questionsContainer');
+    const currentCount = container.querySelectorAll('.question-card').length;
+    const newIdx = currentCount;
+
+    const newCard = document.createElement('div');
+    newCard.className = 'card question-card';
+    newCard.setAttribute('data-index', newIdx);
+    newCard.style.cssText = 'margin-bottom: 1.25rem; padding: 1.5rem; border-top: 3px solid var(--color-primary);';
+
+    newCard.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <span class="badge badge-primary question-number-badge">Question #${newIdx + 1}</span>
+            <button type="button" class="btn btn-outline btn-sm btn-remove-q" style="color: #DC2626; border-color: #FECACA;" onclick="removeQuestion(this);">
+                ✕ Remove
+            </button>
+        </div>
+        <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label" style="font-weight: 600;">Question Prompt <span style="color: #DC2626;">*</span></label>
+            <input type="text" class="form-control q-text-input" name="q_text_${newIdx}" placeholder="Enter question prompt..." required style="font-size: 1rem;">
+        </div>
+        <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label" style="font-weight: 600;">Answer Options & Correct Answer</label>
+            <small style="display: block; color: var(--color-text-muted); margin-bottom: 0.5rem;">Select the radio button next to the correct answer choice.</small>
+            <div class="options-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--color-bg); padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
+                    <input type="radio" id="q_correct_${newIdx}_0" name="q_correct_choice_${newIdx}" value="0" checked style="width: 18px; height: 18px; cursor: pointer;">
+                    <input type="text" class="form-control q-opt-input" name="q_opt_${newIdx}_0" placeholder="Option 1" required style="font-size: 0.9rem;">
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--color-bg); padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
+                    <input type="radio" id="q_correct_${newIdx}_1" name="q_correct_choice_${newIdx}" value="1" style="width: 18px; height: 18px; cursor: pointer;">
+                    <input type="text" class="form-control q-opt-input" name="q_opt_${newIdx}_1" placeholder="Option 2" required style="font-size: 0.9rem;">
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--color-bg); padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
+                    <input type="radio" id="q_correct_${newIdx}_2" name="q_correct_choice_${newIdx}" value="2" style="width: 18px; height: 18px; cursor: pointer;">
+                    <input type="text" class="form-control q-opt-input" name="q_opt_${newIdx}_2" placeholder="Option 3" required style="font-size: 0.9rem;">
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--color-bg); padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
+                    <input type="radio" id="q_correct_${newIdx}_3" name="q_correct_choice_${newIdx}" value="3" style="width: 18px; height: 18px; cursor: pointer;">
+                    <input type="text" class="form-control q-opt-input" name="q_opt_${newIdx}_3" placeholder="Option 4" required style="font-size: 0.9rem;">
+                </div>
+            </div>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Gentle Hint / Scaffolding Clue (Optional)</label>
+            <input type="text" class="form-control q-hint-input" name="q_hint_${newIdx}" placeholder="Supportive hint...">
+        </div>
+    `;
+    container.appendChild(newCard);
+});
+
+// Serialize questions to JSON payload before form submission
+document.getElementById('draftReviewForm').addEventListener('submit', (e) => {
+    const cards = document.querySelectorAll('.question-card');
+    const questionsPayload = [];
+
+    cards.forEach((card, idx) => {
+        const text = card.querySelector('.q-text-input')?.value.trim() || '';
+        const optInputs = card.querySelectorAll('.q-opt-input');
+        const opts = Array.from(optInputs).map(inp => inp.value.trim()).filter(Boolean);
+        const selectedRadio = card.querySelector('input[type="radio"]:checked');
+        const selectedIdx = selectedRadio ? parseInt(selectedRadio.value, 10) : 0;
+        const correct = opts[selectedIdx] || opts[0] || '';
+        const hint = card.querySelector('.q-hint-input')?.value.trim() || null;
+
+        if (text && opts.length >= 2) {
+            questionsPayload.push({
+                order_num: idx + 1,
+                question_text: text,
+                options: opts,
+                correct_answer: correct,
+                hint: hint
+            });
+        }
+    });
+
+    if (questionsPayload.length === 0) {
+        alert('Please ensure at least one question has prompt text and options.');
+        e.preventDefault();
+        return;
+    }
+
+    document.getElementById('questionsJsonInput').value = JSON.stringify(questionsPayload);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}ChildInsight — Observe. Understand. Guide.{% endblock %}
+
+{% block content %}
+<section class="hero-section">
+    <h1 class="hero-title">
+        <span class="hero-highlight">ChildInsight</span>
+    </h1>
+    <p class="hero-subtitle">
+        Intelligent Learning &amp; Development Guidance. Observe interaction patterns, understand learning habits, and guide every child’s potential with evidence-based educational insights.
+    </p>
+    <div class="hero-actions">
+        {% if current_user.is_authenticated %}
+            {% if current_user.role == 'parent' %}
+                <a href="{{ url_for('parent.dashboard') }}" class="btn btn-primary btn-lg">Go to Parent Dashboard</a>
+            {% elif current_user.role == 'teacher' %}
+                <a href="{{ url_for('teacher.dashboard') }}" class="btn btn-primary btn-lg">Go to Teacher Workspace</a>
+            {% elif current_user.role == 'admin' %}
+                <a href="{{ url_for('admin.dashboard') }}" class="btn btn-primary btn-lg">Open Admin Console</a>
+            {% elif current_user.role == 'child' %}
+                <a href="{{ url_for('child.home') }}" class="btn btn-primary btn-lg">Continue Playing</a>
+            {% endif %}
+        {% else %}
+            <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-lg">Create Free Account</a>
+            <a href="{{ url_for('auth.login') }}" class="btn btn-outline btn-lg">Sign In</a>
+        {% endif %}
+    </div>
+</section>
+
+<!-- Responsible Use & Privacy Pledge (PRD §1 & §4) -->
+<section class="responsible-use-card">
+    <h3>🛡️ Responsible-Use &amp; Ethical Educational Pledge</h3>
+    <p>
+        <strong>Educational Guidance Only:</strong> ChildInsight is designed strictly as an educational observation and activity recommendation system. 
+        It does <em>not</em> diagnose, label, or classify children medically or psychologically, and does not assign personality types or IQ scores.
+    </p>
+    <p>
+        All metrics reflect activity interaction patterns (accuracy, pace, consistency, engagement) to offer transparent, explainable guidance to parents and educators.
+    </p>
+</section>
+
+<!-- How It Works (4 Steps) -->
+<section style="margin: 3.5rem 0;">
+    <div style="text-align: center; margin-bottom: 2.5rem;">
+        <h2>How ChildInsight Works</h2>
+        <p style="color: var(--color-text-muted);">From playful interaction to actionable educational insights in four transparent steps.</p>
+    </div>
+
+    <div class="grid-4">
+        <div class="feature-card">
+            <span class="brand-badge" style="margin-bottom: 0.75rem; display: inline-block;">Step 1</span>
+            <div class="feature-icon">🧩</div>
+            <h3>Interactive Play</h3>
+            <p>Children explore structured activities across Visual, Logic, Numbers, Language, and Memory domains at their own pace.</p>
+        </div>
+        <div class="feature-card">
+            <span class="brand-badge" style="margin-bottom: 0.75rem; display: inline-block;">Step 2</span>
+            <div class="feature-icon">⏱️</div>
+            <h3>Event Capture</h3>
+            <p>The platform records interaction flow — choices, response accuracy, duration, hints, and retries — without pressure.</p>
+        </div>
+        <div class="feature-card">
+            <span class="brand-badge" style="margin-bottom: 0.75rem; display: inline-block;">Step 3</span>
+            <div class="feature-icon">📈</div>
+            <h3>Pattern Analytics</h3>
+            <p>Analytics engines convert raw interactions into consistency, engagement, and category performance profiles.</p>
+        </div>
+        <div class="feature-card">
+            <span class="brand-badge" style="margin-bottom: 0.75rem; display: inline-block;">Step 4</span>
+            <div class="feature-icon">💡</div>
+            <h3>Explainable Guidance</h3>
+            <p>Parents and teachers receive tailored recommendations that always explain <em>why</em> a specific activity was suggested.</p>
+        </div>
+    </div>
+</section>
+
+<!-- Why ChildInsight Pillars (design.md §5) -->
+<section style="margin: 3.5rem 0;">
+    <div style="text-align: center; margin-bottom: 2rem;">
+        <h2>Why ChildInsight?</h2>
+        <p style="color: var(--color-text-muted);">A principled approach built on developmental learning research and ethical technology.</p>
+    </div>
+
+    <div class="grid-4">
+        <div class="card" style="margin-bottom: 0; text-align: center; padding: 1.5rem 1.25rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🌱</div>
+            <h3 style="font-size: 1.05rem; margin-bottom: 0.35rem;">Non-Diagnostic</h3>
+            <p style="font-size: 0.88rem; color: var(--color-text-muted); margin: 0;">We observe interaction habits, never assigning clinical labels or psychological disorders.</p>
+        </div>
+        <div class="card" style="margin-bottom: 0; text-align: center; padding: 1.5rem 1.25rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔍</div>
+            <h3 style="font-size: 1.05rem; margin-bottom: 0.35rem;">Explainable AI</h3>
+            <p style="font-size: 0.88rem; color: var(--color-text-muted); margin: 0;">Zero black-box decisions. Every single recommendation explains its pedagogical rationale.</p>
+        </div>
+        <div class="card" style="margin-bottom: 0; text-align: center; padding: 1.5rem 1.25rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🤝</div>
+            <h3 style="font-size: 1.05rem; margin-bottom: 0.35rem;">Zero Comparison</h3>
+            <p style="font-size: 0.88rem; color: var(--color-text-muted); margin: 0;">No student-vs-student rankings or peer leaderboards. We celebrate individual growth journeys.</p>
+        </div>
+        <div class="card" style="margin-bottom: 0; text-align: center; padding: 1.5rem 1.25rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎈</div>
+            <h3 style="font-size: 1.05rem; margin-bottom: 0.35rem;">Playful &amp; Rewarding</h3>
+            <p style="font-size: 0.88rem; color: var(--color-text-muted); margin: 0;">Game-like activities without test stress, designed to build intrinsic learning confidence.</p>
+        </div>
+    </div>
+</section>
+
+<!-- Platform Roles & Features -->
+<section style="margin: 3.5rem 0;">
+    <div style="text-align: center; margin-bottom: 2rem;">
+        <h2>Tailored Portals for Every Role</h2>
+        <p style="color: var(--color-text-muted);">Purpose-built interfaces designed for learners, guardians, and educators.</p>
+    </div>
+
+    <div class="grid-3">
+        <div class="card">
+            <h3>🎨 Child Hub</h3>
+            <p style="color: var(--color-text-muted);">
+                A cheerful, accessible interface with large touch targets, minimal text, and instant positive feedback for preschool and primary age children.
+            </p>
+            <a href="{{ url_for('child.home') }}" class="btn btn-outline btn-sm">Preview Child Area</a>
+        </div>
+        <div class="card">
+            <h3>👨‍👩‍👧 Parent Dashboard</h3>
+            <p style="color: var(--color-text-muted);">
+                Clear performance metrics, category breakdowns, strength indicators, and practical recommendations for home learning.
+            </p>
+            <a href="{{ url_for('auth.register') }}" class="btn btn-outline btn-sm">Register as Parent</a>
+        </div>
+        <div class="card">
+            <h3>👩‍🏫 Educator Workspace</h3>
+            <p style="color: var(--color-text-muted);">
+                Class-wide engagement overviews and individual student profiles focused on personal growth, with strictly zero comparative rankings.
+            </p>
+            <a href="{{ url_for('auth.register') }}" class="btn btn-outline btn-sm">Register as Educator</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

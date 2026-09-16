@@ -1,0 +1,29 @@
+{% extends "base_child.html" %}
+
+{% block title %}{{ t('who_is_playing') }} — ChildInsight{% endblock %}
+
+{% block content %}
+<div style="max-width: 680px; margin: 0 auto 1.5rem;">
+    <a href="{{ url_for('parent.dashboard') }}" class="btn child-btn child-btn-yellow" style="font-size: 0.9rem; padding: 0.4rem 1rem; text-decoration: none; display: inline-flex; align-items: center;">
+        {{ t('back_to_parent_dashboard') }}
+    </a>
+</div>
+
+<div class="child-card" style="max-width: 680px; margin: 0 auto;">
+    <h1 style="font-size: 2.25rem; color: var(--color-child-accent); margin-bottom: 0.5rem;">{{ t('who_is_playing') }}</h1>
+    <p style="font-size: 1.15rem; color: var(--color-text-muted); margin-bottom: 2rem;">{{ t('select_child_start') }}</p>
+
+    {% if children %}
+        <div style="display: flex; flex-direction: column; gap: 1rem; max-width: 380px; margin: 0 auto;">
+            {% for child in children %}
+                <a href="{{ url_for('child.categories_hub', child_id=child.id) }}" class="btn child-btn child-btn-purple" style="text-decoration: none;">
+                    🌱 {{ child.name }}
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p style="color: var(--color-text-muted); margin-bottom: 1.5rem;">{{ t('no_children_found') }}</p>
+        <a href="{{ url_for('parent.child_new') }}" class="btn btn-primary">{{ t('add_child_portal') }}</a>
+    {% endif %}
+</div>
+{% endblock %}

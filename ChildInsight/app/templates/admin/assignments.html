@@ -1,0 +1,165 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Teacher Assignments — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1>Teacher Assignments</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">Pair educators with students for learning observation and guidance.</p>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 2.5rem;">
+    <h2>Assign Educator to Student</h2>
+    <form method="POST" style="margin-top: 1.25rem;">
+        {{ form.hidden_tag() }}
+
+        <div class="grid-3" style="margin: 0 0 1.25rem 0;">
+            <div class="form-group" style="margin: 0;">
+                {{ form.teacher_id.label(class="form-label") }}
+                {{ form.teacher_id(class="form-control") }}
+                {% for error in form.teacher_id.errors %}
+                    <div class="form-error">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group" style="margin: 0;">
+                {{ form.child_id.label(class="form-label") }}
+                {{ form.child_id(class="form-control") }}
+                {% for error in form.child_id.errors %}
+                    <div class="form-error">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div style="display: flex; align-items: flex-end;">
+                {{ form.submit(class="btn btn-primary", style="width: 100%; height: 42px;") }}
+            </div>
+        </div>
+    </form>
+</div>
+
+<div class="card table-responsive-container" style="padding: 0;">
+    <h2 style="padding: 1.25rem 1.25rem 0.5rem 1.25rem;">Active Assignments</h2>
+    {% if assignments %}
+        <table class="admin-data-table">
+            <thead>
+                <tr>
+                    <th class="col-sticky" style="min-width: 220px;">Educator</th>
+                    <th>Student</th>
+                    <th>Parent Contact</th>
+                    <th>Assigned On</th>
+                    <th style="text-align: right;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in assignments %}
+                    <tr>
+                        <td class="col-sticky" style="min-width: 220px; max-width: 320px;">
+                            <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+                                <strong class="admin-table-title" title="{{ a.teacher.name }}">{{ a.teacher.name }}</strong>
+                                <span style="color: var(--color-text-muted); font-size: 0.8rem; font-family: monospace;">#{{ a.id }}</span>
+                            </div>
+                            <span style="display: block; color: var(--color-text-muted); font-size: 0.85rem; word-break: break-all;" title="{{ a.teacher.email }}">{{ a.teacher.email }}</span>
+                        </td>
+                        <td>
+                            <strong class="admin-table-title" title="{{ a.child.name }}">{{ a.child.name }}</strong>
+                            <span style="display: block; color: var(--color-text-muted); font-size: 0.85rem;">{{ a.child.grade or 'Grade N/A' }}</span>
+                        </td>
+                        <td style="color: var(--color-text-muted);">
+                            {{ a.child.parent.name if a.child.parent else 'N/A' }}
+                        </td>
+                        <td style="color: var(--color-text-muted); font-size: 0.85rem;">
+                            {{ a.created_at.strftime('%Y-%m-%d') if a.created_at else '—' }}
+                        </td>
+                        <td style="text-align: right; white-space: nowrap;">
+                            <form method="POST" action="{{ url_for('admin.assignment_delete', assignment_id=a.id) }}" style="display: inline-block;" onsubmit="return confirm('Remove this student assignment?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-outline btn-sm" style="color: var(--color-danger); border-color: #FECACA;">Remove</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p style="padding: 1.5rem; color: var(--color-text-muted); margin: 0;">No active teacher-student assignments found.</p>
+    {% endif %}
+</div>
+
+{# Parent-Granted Educator Access (Transparency & Oversight) #}
+<div class="card table-responsive-container" id="parent-grants" style="padding: 0; margin-top: 2.5rem;">
+    <div style="padding: 1.25rem 1.25rem 0.5rem 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+        <div>
+            <h2 style="margin: 0;">Parent-Granted Educator Access</h2>
+            <p style="color: var(--color-text-muted); font-size: 0.9rem; margin: 0.25rem 0 0 0;">
+                Platform oversight of parent-initiated teacher access requests (active, pending, declined, revoked).
+            </p>
+        </div>
+        <span class="brand-badge" style="background: #F3F4F6; color: var(--color-text-muted);">{{ parent_grants|length if parent_grants else 0 }} Total Records</span>
+    </div>
+    {% if parent_grants %}
+        <table class="admin-data-table">
+            <thead>
+                <tr>
+                    <th class="col-sticky" style="min-width: 200px;">Student</th>
+                    <th>Requesting Parent</th>
+                    <th>Invited Educator</th>
+                    <th>Status</th>
+                    <th>Requested On</th>
+                    <th style="text-align: right;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for grant in parent_grants %}
+                    <tr>
+                        <td class="col-sticky" style="min-width: 200px; max-width: 300px;">
+                            <div style="display: flex; align-items: baseline; gap: 0.5rem;">
+                                <strong class="admin-table-title" title="{{ grant.child.name if grant.child else 'Deleted Child' }}">{{ grant.child.name if grant.child else 'Deleted Child' }}</strong>
+                                <span style="color: var(--color-text-muted); font-size: 0.8rem; font-family: monospace;">#{{ grant.id }}</span>
+                            </div>
+                            <span style="display: block; color: var(--color-text-muted); font-size: 0.85rem;">{{ grant.child.grade or 'Grade N/A' if grant.child else '' }}</span>
+                        </td>
+                        <td>
+                            <strong class="admin-table-title" title="{{ grant.parent.name if grant.parent else 'Unknown Parent' }}">{{ grant.parent.name if grant.parent else 'Unknown Parent' }}</strong>
+                            <span style="display: block; color: var(--color-text-muted); font-size: 0.85rem; word-break: break-all;" title="{{ grant.parent.email if grant.parent else '' }}">{{ grant.parent.email if grant.parent else '' }}</span>
+                        </td>
+                        <td>
+                            <strong class="admin-table-title" title="{{ grant.teacher.name if grant.teacher else grant.invited_email }}">{{ grant.teacher.name if grant.teacher else grant.invited_email }}</strong>
+                            <span style="display: block; color: var(--color-text-muted); font-size: 0.85rem; word-break: break-all;" title="{{ grant.invited_email }}">{{ grant.invited_email }}</span>
+                        </td>
+                        <td>
+                            {% if grant.status == 'active' %}
+                                <span class="brand-badge" style="background: #DCFCE7; color: #166534;">Active</span>
+                            {% elif grant.status == 'pending_teacher_approval' %}
+                                <span class="brand-badge" style="background: #FEF3C7; color: #92400E;">Pending Approval</span>
+                            {% elif grant.status == 'revoked' %}
+                                <span class="brand-badge" style="background: #FEE2E2; color: #991B1B;">Revoked</span>
+                            {% elif grant.status == 'declined' %}
+                                <span class="brand-badge" style="background: #F3F4F6; color: #4B5563;">Declined</span>
+                            {% else %}
+                                <span class="brand-badge">{{ grant.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td style="color: var(--color-text-muted); font-size: 0.85rem;">
+                            {{ grant.created_at.strftime('%Y-%m-%d') if grant.created_at else '—' }}
+                        </td>
+                        <td style="text-align: right; white-space: nowrap;">
+                            {% if grant.can_revoke %}
+                                <form method="POST" action="{{ url_for('admin.admin_revoke_teacher_access', access_id=grant.id) }}" style="display: inline-block;" onsubmit="return confirm('Revoke this parent-granted access? The educator will immediately lose access to student data.');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-outline btn-sm" style="color: var(--color-danger); border-color: #FECACA;">Revoke</button>
+                                </form>
+                            {% else %}
+                                <span style="color: var(--color-text-muted); font-size: 0.85rem;">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p style="padding: 1.5rem; color: var(--color-text-muted); margin: 0;">No parent-initiated teacher access grants recorded.</p>
+    {% endif %}
+</div>
+{% endblock %}

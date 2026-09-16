@@ -1,0 +1,77 @@
+{% extends "base_parent.html" %}
+
+{% block title %}{{ title }} — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper" style="max-width: 550px;">
+    <div class="card">
+        <div class="auth-header">
+            <h1>{{ title }}</h1>
+            <p>Set up your child's basic learning attributes and preferred language.</p>
+        </div>
+
+        <form method="POST" novalidate>
+            {{ form.hidden_tag() }}
+
+            {% if form.csrf_token is defined and form.csrf_token.errors %}
+                <div class="alert alert-danger" role="alert" style="margin-bottom: 1.25rem;">
+                    {% for error in form.csrf_token.errors %}
+                        <div>{{ error if 'expired' in error.lower() else 'Your session or security token has expired. Please refresh the page and try again.' }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if form.errors and not form.name.errors and not form.age.errors and not form.grade.errors and not form.preferred_language.errors and (form.csrf_token is not defined or not form.csrf_token.errors) %}
+                <div class="alert alert-danger" role="alert" style="margin-bottom: 1.25rem;">
+                    {% for field, errors in form.errors.items() %}
+                        {% for error in errors %}
+                            <div>{{ error }}</div>
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <div class="form-group">
+                {{ form.name.label(class="form-label") }}
+                {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else ""), placeholder="e.g. Leo", autofocus=True) }}
+                {% for error in form.name.errors %}
+                    <div class="form-error">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group">
+                {{ form.age.label(class="form-label") }}
+                {{ form.age(class="form-control" + (" is-invalid" if form.age.errors else ""), placeholder="e.g. 7") }}
+                {% for error in form.age.errors %}
+                    <div class="form-error">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group">
+                {{ form.grade.label(class="form-label") }}
+                {{ form.grade(class="form-control" + (" is-invalid" if form.grade.errors else "")) }}
+                {% for error in form.grade.errors %}
+                    <div class="form-error">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group">
+                {{ form.preferred_language.label(class="form-label") }}
+                {{ form.preferred_language(class="form-control" + (" is-invalid" if form.preferred_language.errors else "")) }}
+                {% for error in form.preferred_language.errors %}
+                    <div class="form-error">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                {{ form.submit(class="btn btn-primary", style="flex: 1;") }}
+                {% if child %}
+                    <a href="{{ url_for('parent.child_detail', child_id=child.id) }}" class="btn btn-outline">Cancel</a>
+                {% else %}
+                    <a href="{{ url_for('parent.children_list') }}" class="btn btn-outline">Cancel</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

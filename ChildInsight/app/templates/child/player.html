@@ -1,0 +1,127 @@
+{% extends "base_child.html" %}
+
+{% block title %}{{ activity.get_title(child_lang) }} — ChildInsight{% endblock %}
+
+{% block content %}
+<div style="max-width: 700px; margin: 0 auto;">
+    <!-- Top Progress Bar -->
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+        <a href="{{ url_for('child.abandon', child_id=child.id, activity_id=activity.id) }}" class="btn child-btn child-btn-yellow" style="font-size: 0.85rem; padding: 0.35rem 0.85rem; text-decoration: none; display: inline-flex; align-items: center;">
+            {{ t('back_to_activities') }}
+        </a>
+        <div style="font-weight: 700; color: var(--color-child-accent); font-size: 1.15rem;">
+            {{ t('question_progress', current=q_idx + 1, total=total_q) }}
+        </div>
+        <span class="brand-badge">{{ t(activity.difficulty, default=activity.difficulty) }}</span>
+    </div>
+
+    {% if child_lang == 'hi' and not activity.has_translation('hi') %}
+        <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: var(--radius-md); padding: 0.6rem 1rem; margin-bottom: 1.5rem; font-size: 0.85rem; color: #92400E; display: flex; align-items: center; gap: 0.5rem;">
+            <span>🌐</span>
+            <span>{{ t('english_fallback_notice') }}</span>
+        </div>
+    {% endif %}
+
+    <!-- Question Card -->
+    <div class="child-card" style="margin-bottom: 2rem;">
+        <h2 style="font-size: 1.75rem; color: #1F2937; margin-bottom: 1.75rem; line-height: 1.35;">
+            {{ question.get_question_text(child_lang) }}
+        </h2>
+
+        {% if feedback %}
+            <!-- Immediate Feedback Display -->
+            <div style="
+                padding: 1.5rem;
+                border-radius: var(--radius-lg);
+                margin-bottom: 1.5rem;
+                background: {% if feedback.is_correct %}#ECFDF5{% else %}#FFFBEB{% endif %};
+                border: 3px solid {% if feedback.is_correct %}#A7F3D0{% else %}#FDE68A{% endif %};
+            ">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">
+                    {% if feedback.is_correct %}🎉{% else %}⭐{% endif %}
+                </div>
+                <h3 style="font-size: 1.35rem; color: {% if feedback.is_correct %}#065F46{% else %}#92400E{% endif %}; margin-bottom: 0.5rem;">
+                    {{ feedback.message }}
+                </h3>
+            </div>
+
+            <div style="margin-top: 1rem;">
+                {% if feedback.is_last %}
+                    <a href="{{ url_for('child.results', child_id=child.id, activity_id=activity.id) }}" class="btn child-btn child-btn-coral" style="font-size: 1.25rem; width: 100%;">
+                        {{ t('see_my_results') }}
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('child.player', child_id=child.id, activity_id=activity.id, q=feedback.next_q_idx) }}" class="btn child-btn child-btn-purple" style="font-size: 1.25rem; width: 100%;">
+                        {{ t('next_question') }}
+                    </a>
+                {% endif %}
+            </div>
+
+        {% else %}
+            <!-- Answer Selection Buttons -->
+            <form method="POST" action="{{ url_for('child.answer', child_id=child.id, activity_id=activity.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="question_id" value="{{ question.id }}">
+                <input type="hidden" name="q_idx" value="{{ q_idx }}">
+
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    {% for opt in (options if options is defined and options else question.get_shuffled_options(child_lang)) %}
+                        <button type="submit" name="selected_answer" value="{{ opt }}" class="child-option-btn">
+                            {{ opt }}
+                        </button>
+                    {% endfor %}
+                </div>
+            </form>
+
+            <!-- Learning Helpers: Hint and Skip -->
+            <div style="margin-top: 1.75rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                {% if question.get_hint(child_lang) %}
+                    <button type="button" id="hint-btn" onclick="revealHint()" class="btn" style="background: #FEF3C7; color: #92400E; border: 2px solid #FDE68A; border-radius: var(--radius-md); padding: 0.4rem 0.85rem; font-weight: 600; font-size: 0.95rem; cursor: pointer;">
+                        {{ t('need_hint') }}
+                    </button>
+                {% else %}
+                    <div></div>
+                {% endif %}
+
+                <form method="POST" action="{{ url_for('child.skip', child_id=child.id, activity_id=activity.id) }}" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="question_id" value="{{ question.id }}">
+                    <input type="hidden" name="q_idx" value="{{ q_idx }}">
+                    <button type="submit" class="btn" style="background: transparent; color: #6B7280; border: none; font-size: 0.95rem; cursor: pointer; text-decoration: underline;">
+                        {{ t('skip_question') }}
+                    </button>
+                </form>
+            </div>
+
+            {% if question.get_hint(child_lang) %}
+                <div id="hint-box" style="display: none; margin-top: 1rem; padding: 0.85rem 1.25rem; background: #FFFBEB; border-left: 4px solid #F59E0B; border-radius: var(--radius-sm); color: #92400E; font-size: 0.95rem;">
+                    💡 <em>{{ question.get_hint(child_lang) }}</em>
+                </div>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+{% if question.get_hint(child_lang) %}
+<script>
+function revealHint() {
+    var box = document.getElementById('hint-box');
+    var btn = document.getElementById('hint-btn');
+    if (box) {
+        box.style.display = 'block';
+        if (btn) {
+            btn.style.display = 'none';
+        }
+        fetch("{{ url_for('child.hint', child_id=child.id, activity_id=activity.id) }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: 'question_id={{ question.id }}&csrf_token={{ csrf_token() }}'
+        }).catch(function() {});
+    }
+}
+</script>
+{% endif %}
+{% endblock %}

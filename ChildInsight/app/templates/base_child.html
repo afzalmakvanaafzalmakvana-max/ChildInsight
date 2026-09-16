@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Child Activity Hub — ChildInsight{% endblock %}
+{% block head_extra %}
+<script>
+    document.documentElement.setAttribute('data-theme', 'light');
+</script>
+{% endblock %}
+{% block body_class %}child-theme{% endblock %}
+
+{% block navbar %}
+<nav class="navbar child-navbar">
+    <div class="container navbar-inner" style="height: 80px;">
+        <a href="{{ url_for('child.home') }}" class="brand child-brand">
+            <span>✨ ChildInsight Fun Zone</span>
+        </a>
+        <div class="nav-actions">
+            {% if child %}
+            <span class="brand-badge"
+                style="background: #EDE9FE; color: #5B21B6; font-size: 0.9rem; padding: 0.4rem 0.85rem;">
+                {{ t('playing_as', name=child.name) }}
+            </span>
+            {% endif %}
+            {% if current_user.is_authenticated %}
+            <a href="{{ url_for('auth.logout') }}" class="btn child-btn child-btn-coral"
+                style="font-size: 0.9rem; padding: 0.4rem 1rem; text-decoration: none;">{{ t('exit') }}</a>
+            {% else %}
+            <a href="{{ url_for('auth.login') }}" class="btn child-btn child-btn-purple"
+                style="font-size: 0.9rem; padding: 0.4rem 1.25rem; text-decoration: none;">{{ t('sign_in') }}</a>
+            {% endif %}
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="child-card" style="max-width: 720px; margin: 2rem auto;">
+    <h1 style="font-size: 2.5rem; color: var(--color-child-accent); margin-bottom: 1rem;">{{ t('lets_learn_play') }}
+    </h1>
+    <p style="font-size: 1.25rem; font-weight: 500; color: #4B5563; margin-bottom: 2.5rem;">
+        {{ t('pick_activity_adventure') }}
+    </p>
+
+    <div style="display: flex; flex-direction: column; gap: 1.25rem; max-width: 400px; margin: 0 auto;">
+        {% if child %}
+        <a href="{{ url_for('child.activity_list', child_id=child.id, category_id=categories_by_slug['visual'].id if (categories_by_slug and 'visual' in categories_by_slug) else 1) }}"
+            class="btn child-btn child-btn-purple"
+            style="width: 100%; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            🎨 {{ t('visual') }}
+        </a>
+        <a href="{{ url_for('child.activity_list', child_id=child.id, category_id=categories_by_slug['logic'].id if (categories_by_slug and 'logic' in categories_by_slug) else 2) }}"
+            class="btn child-btn child-btn-yellow"
+            style="width: 100%; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            🧩 {{ t('logic') }}
+        </a>
+        <a href="{{ url_for('child.activity_list', child_id=child.id, category_id=categories_by_slug['numbers'].id if (categories_by_slug and 'numbers' in categories_by_slug) else 3) }}"
+            class="btn child-btn child-btn-coral"
+            style="width: 100%; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            🔢 {{ t('numbers') }}
+        </a>
+        {% elif current_user.is_authenticated %}
+        {% if current_user.is_parent and current_user.children.count() == 1 %}
+        {% set only_child = current_user.children.first() %}
+        <a href="{{ url_for('child.activity_list', child_id=only_child.id, category_id=categories_by_slug['visual'].id if (categories_by_slug and 'visual' in categories_by_slug) else 1) }}"
+            class="btn child-btn child-btn-purple"
+            style="width: 100%; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            🎨 {{ t('visual') }}
+        </a>
+        <a href="{{ url_for('child.activity_list', child_id=only_child.id, category_id=categories_by_slug['logic'].id if (categories_by_slug and 'logic' in categories_by_slug) else 2) }}"
+            class="btn child-btn child-btn-yellow"
+            style="width: 100%; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            🧩 {{ t('logic') }}
+        </a>
+        <a href="{{ url_for('child.activity_list', child_id=only_child.id, category_id=categories_by_slug['numbers'].id if (categories_by_slug and 'numbers' in categories_by_slug) else 3) }}"
+            class="btn child-btn child-btn-coral"
+            style="width: 100%; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            🔢 {{ t('numbers') }}
+        </a>
+        {% else %}
+        <a href="{{ url_for('parent.dashboard') if current_user.is_parent else (url_for('teacher.dashboard') if current_user.is_teacher else (url_for('admin.dashboard') if current_user.is_admin else url_for('auth.index'))) }}"
+            class="btn child-btn child-btn-purple"
+            style="width: 100%; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            🎨 {{ t('visual') }}
+        </a>
+        <a href="{{ url_for('parent.dashboard') if current_user.is_parent else (url_for('teacher.dashboard') if current_user.is_teacher else (url_for('admin.dashboard') if current_user.is_admin else url_for('auth.index'))) }}"
+            class="btn child-btn child-btn-yellow"
+            style="width: 100%; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            🧩 {{ t('logic') }}
+        </a>
+        <a href="{{ url_for('parent.dashboard') if current_user.is_parent else (url_for('teacher.dashboard') if current_user.is_teacher else (url_for('admin.dashboard') if current_user.is_admin else url_for('auth.login', next=url_for('child.home')))) }}"
+            class="btn child-btn child-btn-coral"
+            style="width: 100%; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            🔢 {{ t('numbers') }}
+        </a>
+        {% endif %}
+        {% else %}
+        <a href="{{ url_for('auth.login', next=url_for('child.home')) }}" class="btn child-btn child-btn-purple"
+            style="width: 100%; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            🎨 {{ t('visual') }}
+        </a>
+        <a href="{{ url_for('auth.login', next=url_for('child.home')) }}" class="btn child-btn child-btn-yellow"
+            style="width: 100%; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            🧩 {{ t('logic') }}
+        </a>
+        <a href="{{ url_for('auth.login', next=url_for('child.home')) }}" class="btn child-btn child-btn-coral"
+            style="width: 100%; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            🔢 {{ t('numbers') }}
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Back Navigation -->
+    <div style="margin-top: 2rem;">
+        {% if child %}
+        <a href="{{ url_for('child.categories_hub', child_id=child.id) }}" class="btn child-btn child-btn-yellow"
+            style="font-size: 0.95rem; padding: 0.5rem 1.25rem; text-decoration: none; display: inline-block;">
+            {{ t('back_to_activity_hub') }}
+        </a>
+        {% elif current_user.is_authenticated %}
+        {% if current_user.is_child %}
+        <a href="{{ url_for('child.categories_hub', child_id=current_user.id) }}" class="btn child-btn child-btn-yellow"
+            style="font-size: 0.95rem; padding: 0.5rem 1.25rem; text-decoration: none; display: inline-block;">
+            {{ t('back_to_activity_hub') }}
+        </a>
+        {% elif current_user.is_parent and current_user.children.count() == 1 %}
+        {% set only_child = current_user.children.first() %}
+        <a href="{{ url_for('child.categories_hub', child_id=only_child.id) }}" class="btn child-btn child-btn-yellow"
+            style="font-size: 0.95rem; padding: 0.5rem 1.25rem; text-decoration: none; display: inline-block;">
+            {{ t('back_to_activity_hub') }}
+        </a>
+        {% elif current_user.is_parent %}
+        <a href="{{ url_for('parent.dashboard') }}" class="btn child-btn child-btn-yellow"
+            style="font-size: 0.95rem; padding: 0.5rem 1.25rem; text-decoration: none; display: inline-block;">
+            {{ t('back_to_parent_dashboard') }}
+        </a>
+        {% elif current_user.is_teacher %}
+        <a href="{{ url_for('teacher.dashboard') }}" class="btn child-btn child-btn-yellow"
+            style="font-size: 0.95rem; padding: 0.5rem 1.25rem; text-decoration: none; display: inline-block;">
+            {{ t('back_to_teacher_workspace') }}
+        </a>
+        {% elif current_user.is_admin %}
+        <a href="{{ url_for('admin.dashboard') }}" class="btn child-btn child-btn-yellow"
+            style="font-size: 0.95rem; padding: 0.5rem 1.25rem; text-decoration: none; display: inline-block;">
+            Back to Admin Dashboard
+        </a>
+        {% else %}
+        <a href="{{ url_for('auth.login', next=url_for('child.home')) }}" class="btn child-btn child-btn-yellow"
+            style="font-size: 0.95rem; padding: 0.5rem 1.25rem; text-decoration: none; display: inline-block;">
+            {{ t('back_to_activity_hub') }}
+        </a>
+        {% endif %}
+        {% else %}
+        <a href="{{ url_for('auth.login', next=url_for('child.home')) }}" class="btn child-btn child-btn-yellow"
+            style="font-size: 0.95rem; padding: 0.5rem 1.25rem; text-decoration: none; display: inline-block;">
+            {{ t('back_to_activity_hub') }}
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

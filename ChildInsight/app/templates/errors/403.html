@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Access Forbidden — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="card" style="padding: 3rem 2rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-md);">
+        <div style="font-size: 3rem; margin-bottom: 0.5rem;">🔒</div>
+        <div class="error-code" style="color: var(--color-danger);">403</div>
+        <h1 class="error-title">Access Forbidden</h1>
+        <p class="error-message">You do not have permission to view or manage this profile or resource. In ChildInsight, learner records are strictly protected to ensure child privacy.</p>
+        <div style="display: flex; gap: 0.75rem; justify-content: center;">
+            <a href="javascript:history.back()" class="btn btn-outline">Go Back</a>
+            <a href="{{ url_for('auth.index') }}" class="btn btn-primary">Return to Homepage</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

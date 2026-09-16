@@ -1,0 +1,241 @@
+{% extends "base_parent.html" %}
+
+{% block title %}{{ child.name }}'s Profile & Learning Journey — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <a href="{{ url_for('parent.dashboard', child_id=child.id) }}" style="font-size: 0.9rem; color: var(--color-text-muted);">&larr; Back to Dashboard</a>
+        <h1 style="margin-top: 0.5rem;">{{ child.name }}'s Learning Journey</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">Comprehensive educational strengths, practice opportunities, and activity history.</p>
+    </div>
+    <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <a href="{{ url_for('parent.download_pdf_report', child_id=child.id) }}" class="btn btn-outline btn-sm">📄 Download PDF</a>
+        <a href="{{ url_for('parent.download_csv_report', child_id=child.id) }}" class="btn btn-outline btn-sm">📊 Download CSV</a>
+        <a href="{{ url_for('parent.child_edit', child_id=child.id) }}" class="btn btn-primary btn-sm">Edit Profile</a>
+        <form method="POST" action="{{ url_for('parent.child_delete', child_id=child.id) }}" onsubmit="return confirm('Are you sure you want to delete {{ child.name }}\'s profile?');" style="margin: 0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline btn-sm" style="color: var(--color-danger); border-color: #FECACA;">Delete</button>
+        </form>
+    </div>
+</div>
+
+<!-- Profile Info Strip -->
+<div class="stats-grid" style="margin-bottom: 1.5rem;">
+    <div class="stat-card">
+        <div class="stat-label">Learning Stage / Grade</div>
+        <div class="stat-value" style="font-size: 1.3rem;">{{ child.grade or 'Not specified' }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Learner Age</div>
+        <div class="stat-value" style="font-size: 1.3rem;">{{ child.age or 'Not set' }} years old</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Preferred Language</div>
+        <div class="stat-value" style="font-size: 1.3rem;">{{ child.preferred_language }}</div>
+    </div>
+</div>
+
+<!-- Learning Strengths & Practice Opportunities (Friendly Language, No Raw Data Tables) -->
+<div class="grid-2" style="margin-bottom: 1.5rem;">
+    <div class="card" style="border-top: 4px solid #10B981;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+            <span style="font-size: 1.5rem;">🌟</span>
+            <h3 style="margin: 0; color: #065F46;">Demonstrated Strengths</h3>
+        </div>
+        <p style="color: var(--color-text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+            Areas where {{ child.name }} has shown high enthusiasm, consistent participation, and strong understanding:
+        </p>
+        {% if dash_data.strengths %}
+            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.75rem;">
+                {% for st in dash_data.strengths %}
+                    <li style="background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+                        <strong>{{ st.name }}</strong>
+                        <div style="font-size: 0.85rem; color: #166534; margin-top: 0.25rem;">
+                            Thriving with steady accuracy ({{ st.accuracy|round(1) }}%) across {{ st.sessions_count }} interactive sessions.
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <div style="background: var(--color-bg); padding: 1rem; border-radius: var(--radius-md); color: var(--color-text-muted); font-size: 0.9rem;">
+                Strengths will appear here as {{ child.name }} completes more interactive activities across different categories.
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="card" style="border-top: 4px solid #F59E0B;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+            <span style="font-size: 1.5rem;">🌱</span>
+            <h3 style="margin: 0; color: #92400E;">Practice Opportunities</h3>
+        </div>
+        <p style="color: var(--color-text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+            Gentle growth areas where playful practice will help build confidence and skill mastery:
+        </p>
+        {% if dash_data.practice_areas %}
+            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.75rem;">
+                {% for pa in dash_data.practice_areas[:3] %}
+                    <li style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: var(--radius-md); padding: 0.75rem 1rem;">
+                        <strong>{{ pa.name }}</strong>
+                        <div style="font-size: 0.85rem; color: #92400E; margin-top: 0.25rem;">
+                            {% if pa.sessions_count == 0 %}
+                                An exciting new category to explore together!
+                            {% else %}
+                                Supportive practice at an accessible difficulty level is recommended to strengthen core concepts.
+                            {% endif %}
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <div style="background: var(--color-bg); padding: 1rem; border-radius: var(--radius-md); color: var(--color-text-muted); font-size: 0.9rem;">
+                {{ child.name }} is showing balanced confidence across all explored categories!
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Friendly Activity History -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+            <h2 style="margin: 0;">Recent Play & Learning Sessions</h2>
+            <p style="color: var(--color-text-muted); font-size: 0.85rem; margin: 0.25rem 0 0;">Recent educational activities and exploration moments.</p>
+        </div>
+        <a href="{{ url_for('child.categories_hub', child_id=child.id) }}" class="btn btn-primary btn-sm" target="_blank">+ Play More</a>
+    </div>
+    {% if dash_data.recent_sessions %}
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            {% for s in dash_data.recent_sessions %}
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.9rem 1.2rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                            <strong>{{ s.activity.title if s.activity else 'Activity' }}</strong>
+                            <span class="brand-badge">{{ s.activity.category.name if s.activity and s.activity.category else 'General' }}</span>
+                            <span class="brand-badge" style="background: #F3F4F6; color: #4B5563;">{{ s.activity.difficulty if s.activity else 'Beginner' }}</span>
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--color-text-muted);">
+                            Played on {{ s.start_time.strftime('%B %d at %I:%M %p') if s.start_time else 'Recently' }} &bull; Spent {{ s.duration_seconds }} seconds exploring
+                        </div>
+                    </div>
+                    <div>
+                        {% if s.status == 'completed' %}
+                            <span class="brand-badge" style="background: #DCFCE7; color: #166534; font-size: 0.9rem; padding: 0.35rem 0.75rem;">🌟 Completed</span>
+                        {% else %}
+                            <span class="brand-badge" style="background: #FEF3C7; color: #92400E; font-size: 0.9rem; padding: 0.35rem 0.75rem;">Explored Part</span>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p style="color: var(--color-text-muted); margin: 0;">No activity sessions recorded yet. Start playing to see session history!</p>
+    {% endif %}
+</div>
+
+<!-- Connected Educators (Admin Assigned) -->
+<div class="card">
+    <h2>Connected Educators</h2>
+    {% if child.assigned_teachers and child.assigned_teachers.count() > 0 %}
+        <ul style="list-style: none; margin-top: 1rem; padding: 0;">
+            {% for assignment in child.assigned_teachers %}
+                <li style="padding: 0.75rem; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <strong>{{ assignment.teacher.name }}</strong>
+                        <span style="color: var(--color-text-muted); font-size: 0.9rem; margin-left: 0.5rem;">({{ assignment.teacher.email }})</span>
+                    </div>
+                    <span class="brand-badge" style="background: #FEF3C7; color: #92400E;">Admin Assigned</span>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p style="color: var(--color-text-muted); margin-top: 0.75rem; margin-bottom: 0;">
+            No educators are currently assigned to {{ child.name }} by platform administrators.
+        </p>
+    {% endif %}
+</div>
+
+<!-- Share with a Teacher (Parent-Initiated Teacher Access) -->
+<div class="card" id="share-with-teacher" style="margin-top: 1.5rem;">
+    <div style="margin-bottom: 1.25rem;">
+        <h2 style="margin: 0;">Share with a Teacher</h2>
+        <p style="color: var(--color-text-muted); margin: 0.25rem 0 0 0; font-size: 0.95rem;">
+            Grant a specific educator read-only access to {{ child.name }}'s full learning report, analytics, and session history.
+        </p>
+    </div>
+
+    <!-- Invite Form -->
+    <form method="POST" action="{{ url_for('parent.share_child_teacher', child_id=child.id) }}" style="background: var(--color-bg); padding: 1.25rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; border: 1px solid var(--color-border);">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="teacher_email" style="display: block; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.95rem;">
+            Invite Educator by Email
+        </label>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+            <input type="email" id="teacher_email" name="teacher_email" required placeholder="teacher@school.org"
+                   style="flex: 1; min-width: 240px; padding: 0.6rem 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text);">
+            <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Send Access Request</button>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--color-text-muted); margin: 0.5rem 0 0 0;">
+            The educator must have an active teacher account and will need to accept the request before accessing {{ child.name }}'s report.
+        </p>
+    </form>
+
+    <!-- Teachers with Access (Active) -->
+    <div style="margin-bottom: 1.5rem;">
+        <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Teachers with Access</h3>
+        {% if active_grants %}
+            <ul style="list-style: none; padding: 0; margin: 0;">
+                {% for grant in active_grants %}
+                    <li style="padding: 0.85rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; background: var(--color-surface);">
+                        <div>
+                            <strong>{{ grant.teacher.name if grant.teacher else grant.invited_email }}</strong>
+                            <span style="color: var(--color-text-muted); font-size: 0.9rem; margin-left: 0.5rem;">({{ grant.invited_email }})</span>
+                            <div style="font-size: 0.85rem; color: var(--color-text-muted); margin-top: 0.2rem;">
+                                Active since {{ grant.responded_at.strftime('%b %d, %Y') if grant.responded_at else grant.created_at.strftime('%b %d, %Y') }}
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <span class="brand-badge" style="background: #DCFCE7; color: #166534;">Active</span>
+                            <form method="POST" action="{{ url_for('parent.revoke_teacher_access', child_id=child.id, access_id=grant.id) }}" onsubmit="return confirm('Revoke educator access for this teacher? They will immediately lose access to {{ child.name }}\'s report.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-outline btn-sm" style="color: var(--color-danger); border-color: #FECACA;">Revoke Access</button>
+                            </form>
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p style="color: var(--color-text-muted); font-size: 0.95rem; margin: 0;">No parent-granted educator access active yet.</p>
+        {% endif %}
+    </div>
+
+    <!-- Pending Approval -->
+    <div>
+        <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Pending Approval</h3>
+        {% if pending_grants %}
+            <ul style="list-style: none; padding: 0; margin: 0;">
+                {% for grant in pending_grants %}
+                    <li style="padding: 0.85rem; border: 1px dashed var(--color-border); border-radius: var(--radius-md); margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; background: var(--color-bg);">
+                        <div>
+                            <strong>{{ grant.teacher.name if grant.teacher else grant.invited_email }}</strong>
+                            <span style="color: var(--color-text-muted); font-size: 0.9rem; margin-left: 0.5rem;">({{ grant.invited_email }})</span>
+                            <div style="font-size: 0.85rem; color: var(--color-text-muted); margin-top: 0.2rem;">
+                                Sent {{ grant.created_at.strftime('%b %d, %Y') }} — Awaiting educator response
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <span class="brand-badge" style="background: #FEF3C7; color: #92400E;">Pending Teacher Approval</span>
+                            <form method="POST" action="{{ url_for('parent.revoke_teacher_access', child_id=child.id, access_id=grant.id) }}" onsubmit="return confirm('Cancel this access request?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-outline btn-sm">Cancel</button>
+                            </form>
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p style="color: var(--color-text-muted); font-size: 0.95rem; margin: 0;">No pending access requests.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

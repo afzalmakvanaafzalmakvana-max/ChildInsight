@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <div class="card">
+        <div class="auth-header">
+            <h1>Welcome Back</h1>
+            <p>Sign in to access your learning dashboard and insights.</p>
+        </div>
+
+        <form method="POST" action="{{ url_for('auth.login', next=request.args.get('next')) if request.args.get('next') else url_for('auth.login') }}" novalidate>
+            {{ form.hidden_tag() }}
+            {% if not form.next.data and (request.args.get('next') or request.form.get('next')) %}
+                <input type="hidden" name="next" value="{{ request.args.get('next') or request.form.get('next') }}">
+            {% endif %}
+
+            {% if form.csrf_token is defined and form.csrf_token.errors %}
+                <div class="alert alert-danger" role="alert" style="margin-bottom: 1.25rem;">
+                    {% for error in form.csrf_token.errors %}
+                        <div>{{ error if 'expired' in error.lower() else 'Your session or security token has expired. Please refresh the page and try again.' }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if form.errors and not form.email.errors and not form.password.errors and (form.csrf_token is not defined or not form.csrf_token.errors) %}
+                <div class="alert alert-danger" role="alert" style="margin-bottom: 1.25rem;">
+                    {% for field, errors in form.errors.items() %}
+                        {% for error in errors %}
+                            <div>{{ error }}</div>
+                        {% endfor %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <div class="form-group">
+                {{ form.email.label(class="form-label") }}
+                {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), placeholder="name@example.com", autofocus=True) }}
+                {% for error in form.email.errors %}
+                    <div class="form-error">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    {{ form.password.label(class="form-label", style="margin-bottom: 0.25rem;") }}
+                    <a href="{{ url_for('auth.forgot_password') }}" style="font-size: 0.85rem; color: var(--color-primary); font-weight: 500;">Forgot password?</a>
+                </div>
+                {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), placeholder="••••••••") }}
+                {% for error in form.password.errors %}
+                    <div class="form-error">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group form-checkbox">
+                {{ form.remember_me() }}
+                {{ form.remember_me.label(class="form-label", style="margin-bottom:0; font-weight:normal; cursor:pointer;") }}
+            </div>
+
+            <div style="margin-top: 1.5rem;">
+                {{ form.submit(class="btn btn-primary", style="width: 100%;") }}
+            </div>
+        </form>
+
+        <div style="text-align: center; margin-top: 1.5rem; font-size: 0.9rem; color: var(--color-text-muted);">
+            Don't have an account yet? 
+            <a href="{{ url_for('auth.register') }}" style="font-weight: 600;">Create an account</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,168 @@
+{% extends "base_parent.html" %}
+
+{% block title %}Tailored Recommendations — ChildInsight{% endblock %}
+
+{% block head_extra %}
+<style>
+.badge-level-up { background: #DCFCE7; color: #166534; }
+.badge-reinforce { background: #E0E7FF; color: #3730A3; }
+.badge-practice { background: #FEF3C7; color: #92400E; }
+.badge-explore { background: #F3E8FF; color: #6B21A8; }
+.rec-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.rec-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+@media (max-width: 640px) {
+    .rec-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1>Tailored Learning Recommendations</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">Personalized activity suggestions based on your child's recent performance and developmental profile.</p>
+    </div>
+    {% if selected_child %}
+    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+        <a href="{{ url_for('parent.progress_reports', child_id=selected_child.id) }}" class="btn btn-outline btn-sm">📈 Progress & Reports</a>
+        <a href="{{ url_for('child.categories_hub', child_id=selected_child.id) }}" class="btn btn-outline btn-sm" target="_blank">🎮 Activity Hub &rarr;</a>
+    </div>
+    {% endif %}
+</div>
+
+{% if not children %}
+    <!-- Empty State: No Children -->
+    <div class="card empty-state" style="text-align: center; padding: 3rem 1.5rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🌱</div>
+        <h2>No Registered Children Yet</h2>
+        <p style="color: var(--color-text-muted); max-width: 480px; margin: 0 auto 1.5rem;">
+            Add your child's profile to begin generating tailored learning recommendations and developmental pathways.
+        </p>
+        <a href="{{ url_for('parent.child_new') }}" class="btn btn-primary">+ Add Child Profile</a>
+    </div>
+{% else %}
+    <!-- Child Selector Tabs (if parent has multiple children) -->
+    {% if children|length > 1 %}
+    <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; overflow-x: auto; padding-bottom: 0.25rem;">
+        {% for c in children %}
+        <a href="{{ url_for('parent.recommendations', child_id=c.id) }}"
+           class="btn btn-sm {% if c.id == selected_child.id %}btn-primary{% else %}btn-outline{% endif %}"
+           style="border-radius: 9999px; text-decoration: none;">
+            👤 {{ c.name }} (Age {{ c.age or 'N/A' }})
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Selected Child Summary Bar -->
+    <div class="card" style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div style="width: 48px; height: 48px; border-radius: 50%; background: #EFF6FF; color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700;">
+                {{ selected_child.name[0] }}
+            </div>
+            <div>
+                <h2 style="margin: 0; font-size: 1.25rem;">{{ selected_child.name }}</h2>
+                <span style="color: var(--color-text-muted); font-size: 0.88rem;">
+                    Age: {{ selected_child.age or 'Not set' }} &bull; Grade: {{ selected_child.grade or 'General' }} &bull; Language: {{ selected_child.preferred_language }}
+                </span>
+            </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+            <a href="{{ url_for('parent.child_detail', child_id=selected_child.id) }}" class="btn btn-outline btn-sm">Full Profile &rarr;</a>
+            <a href="{{ url_for('parent.progress_reports', child_id=selected_child.id) }}" class="btn btn-outline btn-sm">Progress & Reports &rarr;</a>
+        </div>
+    </div>
+
+    <!-- Learning Pattern Observation (K-Means Clustering) -->
+    {% if pattern_profile %}
+    <div class="card" style="margin-bottom: 1.5rem; border-left: 4px solid #8B5CF6; background: var(--color-bg-card);">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span style="font-size: 1.35rem;">🧩</span>
+            <h3 style="margin: 0;">Interactive Learning Pattern Insight</h3>
+        </div>
+        <div style="font-weight: 600; color: #8B5CF6; font-size: 0.95rem; margin-bottom: 0.35rem;">
+            {{ pattern_profile.cluster_label }}
+        </div>
+        <p style="color: var(--color-text-main); margin: 0; font-size: 0.92rem; line-height: 1.5;">
+            {{ pattern_profile.observation }}
+        </p>
+    </div>
+    {% endif %}
+
+    <!-- Recommendations List -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+            <div>
+                <h2 style="margin: 0;">Ranked Activity Recommendations</h2>
+                <p style="color: var(--color-text-muted); font-size: 0.85rem; margin: 0.25rem 0 0;">
+                    Tailored next steps designed to strengthen skills, reinforce concepts, or introduce balanced challenge.
+                </p>
+            </div>
+            <span class="brand-badge" style="background: #F3F4F6; color: var(--color-text-muted);">
+                {{ recommendations|length }} recommendations
+            </span>
+        </div>
+
+        {% if recommendations %}
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                {% for rec in recommendations %}
+                    <div class="rec-card">
+                        <div style="flex: 1; padding-right: 1.25rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem;">
+                                <span style="font-weight: 700; color: var(--color-text-muted); font-size: 0.85rem;">#{{ rec.priority }}</span>
+                                <strong style="font-size: 1.1rem;">{{ rec.activity_title | replace(' [Demo Data]', '') }}</strong>
+                                {% if '[Demo Data]' in rec.activity_title %}
+                                    <span class="brand-badge" style="background: #FEF3C7; color: #92400E; font-size: 0.72rem;">Demo Data</span>
+                                {% endif %}
+                                <span class="brand-badge">{{ rec.category_name }}</span>
+                                <span class="brand-badge" style="background: #F3F4F6; color: #4B5563;">{{ rec.difficulty }}</span>
+                                <span class="brand-badge badge-{{ rec.recommendation_type }}">{{ rec.recommendation_type|replace('_', ' ')|capitalize }}</span>
+                            </div>
+                            <p style="margin: 0; font-size: 0.92rem; color: var(--color-text-main); line-height: 1.45;">
+                                💡 {{ rec.reason }}
+                            </p>
+                        </div>
+                        <div>
+                            <a href="{{ url_for('child.player', child_id=selected_child.id, activity_id=rec.activity_id) }}" class="btn btn-primary btn-sm" target="_blank">
+                                Start Activity &rarr;
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div style="text-align: center; padding: 2.5rem 1rem;">
+                <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">✨</div>
+                <h3 style="margin-bottom: 0.5rem;">No Recommendations Yet</h3>
+                <p style="color: var(--color-text-muted); max-width: 440px; margin: 0 auto 1.25rem; font-size: 0.9rem;">
+                    {{ selected_child.name }} hasn't completed enough activities yet to generate personalized recommendations. Explore activities together to get started!
+                </p>
+                <a href="{{ url_for('child.categories_hub', child_id=selected_child.id) }}" class="btn btn-primary btn-sm" target="_blank">
+                    Explore Activity Hub &rarr;
+                </a>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Responsible Use Notice -->
+    <div style="background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1rem 1.25rem; font-size: 0.82rem; color: var(--color-text-muted); line-height: 1.45;">
+        <strong>Responsible Educational Guidance:</strong> Activity recommendations are algorithmically suggested to encourage curiosity, reinforce foundation skills, and support healthy cognitive pacing. They are not prescriptive diagnostic assignments.
+    </div>
+{% endif %}
+{% endblock %}

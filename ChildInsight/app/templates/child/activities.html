@@ -1,0 +1,55 @@
+{% extends "base_child.html" %}
+
+{% block title %}Choose an Adventure — ChildInsight{% endblock %}
+
+{% block content %}
+<div style="max-width: 960px; margin: 0 auto 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+    {% if current_user.is_authenticated and current_user.is_parent %}
+        <a href="{{ url_for('parent.dashboard') }}" class="btn child-btn child-btn-yellow" style="font-size: 0.9rem; padding: 0.4rem 1rem; text-decoration: none;">
+            {{ t('back_to_parent_dashboard') }}
+        </a>
+        {% if current_user.children.count() > 1 %}
+            <a href="{{ url_for('child.home') }}" class="btn child-btn child-btn-purple" style="font-size: 0.85rem; padding: 0.4rem 0.9rem; text-decoration: none;">
+                {{ t('switch_learner') }}
+            </a>
+        {% endif %}
+    {% elif current_user.is_authenticated and current_user.is_teacher %}
+        <a href="{{ url_for('teacher.dashboard') }}" class="btn child-btn child-btn-yellow" style="font-size: 0.9rem; padding: 0.4rem 1rem; text-decoration: none;">
+            {{ t('back_to_teacher_workspace') }}
+        </a>
+    {% elif current_user.is_authenticated and current_user.is_child %}
+        <a href="{{ url_for('child.home') }}" class="btn child-btn child-btn-yellow" style="font-size: 0.9rem; padding: 0.4rem 1rem; text-decoration: none;">
+            {{ t('back_to_home') }}
+        </a>
+    {% elif current_user.is_authenticated and current_user.is_admin %}
+        <a href="{{ url_for('admin.dashboard') }}" class="btn child-btn child-btn-yellow" style="font-size: 0.9rem; padding: 0.4rem 1rem; text-decoration: none;">
+            Back to Admin Dashboard
+        </a>
+    {% else %}
+        <a href="{{ url_for('child.home') }}" class="btn child-btn child-btn-yellow" style="font-size: 0.9rem; padding: 0.4rem 1rem; text-decoration: none;">
+            {{ t('back_to_home') }}
+        </a>
+    {% endif %}
+</div>
+
+<div style="text-align: center; margin-bottom: 2rem;">
+    <h1 style="font-size: 2.25rem; color: var(--color-child-accent); margin-bottom: 0.5rem;">
+        {{ t('hi_lets_play', name=child.name) }}
+    </h1>
+    <p style="font-size: 1.15rem; color: #4B5563;">{{ t('pick_category_explore') }}</p>
+</div>
+
+<div class="grid-3" style="max-width: 960px; margin: 0 auto; gap: 1.5rem;">
+    {% for cat in categories %}
+        <a href="{{ url_for('child.activity_list', child_id=child.id, category_id=cat.id) }}" style="text-decoration: none; color: inherit;">
+            <div class="child-card" style="padding: 2rem 1.5rem; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: transform 0.15s; border-color: #DDD6FE;">
+                <div style="font-size: 3.5rem; margin-bottom: 0.75rem;">{{ cat.icon }}</div>
+                <h2 style="font-size: 1.5rem; color: var(--color-text-main); margin-bottom: 0.5rem;">{{ t(cat.slug, default=cat.name) }}</h2>
+                <span class="btn child-btn child-btn-purple" style="font-size: 0.95rem; padding: 0.5rem 1.25rem; margin-top: 0.75rem;">
+                    {{ t('explore') }}
+                </span>
+            </div>
+        </a>
+    {% endfor %}
+</div>
+{% endblock %}

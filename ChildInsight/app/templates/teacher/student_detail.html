@@ -1,0 +1,358 @@
+{% extends "base_teacher.html" %}
+
+{% block title %}{{ child.name }}'s Profile — Educator Workspace — ChildInsight{% endblock %}
+
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+.pattern-callout {
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+}
+.pattern-icon {
+    font-size: 1.8rem;
+    line-height: 1;
+}
+.badge-level-up { background: #DCFCE7; color: #166534; }
+.badge-reinforce { background: #E0E7FF; color: #3730A3; }
+.badge-practice { background: #FEF3C7; color: #92400E; }
+.badge-explore { background: #F3E8FF; color: #6B21A8; }
+.chart-container {
+    position: relative;
+    height: 250px;
+    width: 100%;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <a href="{{ url_for('teacher.dashboard') }}" style="font-size: 0.9rem; color: var(--color-text-muted);">&larr; Back to Student Roster</a>
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem;">
+            <h1 style="margin: 0;">
+                {{ child.name | replace(' [Demo Data]', '') }}
+                {% if '[Demo Data]' in child.name %}
+                    <span class="brand-badge" style="background: #FEF3C7; color: #92400E; font-size: 0.8rem; vertical-align: middle;">Demo Data</span>
+                {% endif %}
+            </h1>
+            <span class="brand-badge" style="background: {{ dash_data.status_info.bg }}; color: {{ dash_data.status_info.color }}; font-size: 0.95rem; padding: 0.35rem 0.85rem; font-weight: 700;">
+                {{ dash_data.status_info.label }}
+            </span>
+        </div>
+        <p style="color: var(--color-text-muted); margin: 0.25rem 0 0;">
+            Stage: {{ child.grade or 'Not specified' }} &bull; Age: {{ child.age or 'Not set' }} &bull; Language: {{ child.preferred_language }}
+        </p>
+    </div>
+    <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <a href="{{ url_for('teacher.download_pdf_report', child_id=child.id) }}" class="btn btn-outline btn-sm">📄 Download PDF</a>
+        <a href="{{ url_for('teacher.download_csv_report', child_id=child.id) }}" class="btn btn-outline btn-sm">📊 Download CSV</a>
+    </div>
+</div>
+
+<!-- Summary Metric Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Composite Performance</div>
+        <div class="stat-value">{{ dash_data.snapshot.performance_score|round(1) }} <span style="font-size: 1rem; color: var(--color-text-muted);">/ 100</span></div>
+        <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0.25rem 0 0;">Weighted accuracy & consistency</p>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Engagement Index</div>
+        <div class="stat-value">{{ dash_data.snapshot.engagement_index|round(1) }} <span style="font-size: 1rem; color: var(--color-text-muted);">/ 100</span></div>
+        <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0.25rem 0 0;">Persistence, retries & exploration</p>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Completed Sessions</div>
+        <div class="stat-value">{{ dash_data.snapshot.completed_sessions }} <span style="font-size: 1rem; color: var(--color-text-muted);">of {{ dash_data.snapshot.total_sessions }}</span></div>
+        <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0.25rem 0 0;">{{ dash_data.snapshot.completion_rate|round(1) }}% completion rate</p>
+    </div>
+</div>
+
+<!-- Learning Pattern Engine Observation (Phase 7) -->
+<div class="pattern-callout">
+    <div class="pattern-icon">🧠</div>
+    <div>
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+            <strong style="color: #1E40AF; font-size: 0.95rem;">Learning Pattern Group:</strong>
+            <span class="brand-badge" style="background: #DBEAFE; color: #1E40AF; font-weight: 600;">{{ dash_data.pattern_profile.pattern_group }}</span>
+        </div>
+        <p style="margin: 0; color: #1E3A8A; font-size: 0.95rem; line-height: 1.4;">
+            {{ dash_data.pattern_profile.observation }}
+        </p>
+    </div>
+</div>
+
+{% if dash_data.snapshot.total_sessions == 0 %}
+    <div class="card" style="text-align: center; padding: 2.5rem 1.5rem; margin-bottom: 1.5rem;">
+        <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">🧩</div>
+        <h3>No activity sessions recorded yet for {{ child.name }}</h3>
+        <p style="color: var(--color-text-muted); max-width: 440px; margin: 0.5rem auto;">
+            Encourage {{ child.name }} to begin exploring introductory activities. Performance and pattern analytics will appear automatically.
+        </p>
+    </div>
+{% else %}
+    <!-- Charts Grid -->
+    <div class="grid-2" style="margin-bottom: 1.5rem;">
+        <div class="card">
+            <h3 style="margin-bottom: 0.5rem;">Domain Performance</h3>
+            <p style="color: var(--color-text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Average accuracy across educational categories</p>
+            <div class="chart-container">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h3 style="margin-bottom: 0.5rem;">Session Progress Trend</h3>
+            <p style="color: var(--color-text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Chronological accuracy trend across completed activities</p>
+            <div class="chart-container">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+<!-- Tailored Recommendations (Phase 6) -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+            <h2 style="margin: 0;">Tailored Learning Recommendations</h2>
+            <p style="color: var(--color-text-muted); font-size: 0.85rem; margin: 0.25rem 0 0;">
+                Evidence-based suggestions to guide instructional planning and individualized support.
+            </p>
+        </div>
+        <span class="brand-badge" style="background: #F3F4F6; color: var(--color-text-muted);">{{ dash_data.recommendations|length }} suggestions</span>
+    </div>
+
+    {% if dash_data.recommendations %}
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            {% for rec in dash_data.recommendations %}
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                            <span style="font-weight: 700; color: var(--color-text-muted); font-size: 0.85rem;">#{{ rec.priority }}</span>
+                            <strong style="font-size: 1.05rem;">{{ rec.activity_title | replace(' [Demo Data]', '') }}</strong>
+                            {% if '[Demo Data]' in rec.activity_title %}
+                                <span class="brand-badge" style="background: #FEF3C7; color: #92400E; font-size: 0.72rem;">Demo Data</span>
+                            {% endif %}
+                            <span class="brand-badge">{{ rec.category_name }}</span>
+                            <span class="brand-badge" style="background: #F3F4F6; color: #4B5563;">{{ rec.difficulty }}</span>
+                            <span class="brand-badge badge-{{ rec.recommendation_type }}">{{ rec.recommendation_type|replace('_', ' ')|capitalize }}</span>
+                        </div>
+                        <p style="margin: 0; font-size: 0.9rem; color: var(--color-text-main); line-height: 1.35;">
+                            💡 {{ rec.reason }}
+                        </p>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p style="color: var(--color-text-muted); margin: 0;">No recommendations generated yet.</p>
+    {% endif %}
+</div>
+
+<!-- Assign Guided Learning Activity (Teacher Write Action) -->
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div style="margin-bottom: 1rem;">
+        <h2 style="margin: 0;">Assign Guided Activity</h2>
+        <p style="color: var(--color-text-muted); font-size: 0.85rem; margin: 0.25rem 0 0;">
+            Directly recommend an activity from the learning catalog to support {{ child.name }}'s individual development.
+        </p>
+    </div>
+
+    <form method="POST" action="{{ url_for('teacher.assign_activity', child_id=child.id) }}" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div style="flex: 1; min-width: 260px;">
+            <label for="assign-activity-select" class="form-label" style="font-size: 0.85rem;">Select Educational Activity</label>
+            <select id="assign-activity-select" name="activity_id" class="form-control" required>
+                <option value="">-- Choose an activity --</option>
+                {% for act in activities %}
+                    <option value="{{ act.id }}">
+                        {{ act.title }} ({{ act.category.name if act.category else 'General' }} &bull; {{ act.difficulty }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="flex: 2; min-width: 260px;">
+            <label for="assign-note" class="form-label" style="font-size: 0.85rem;">Instructional Note / Guidance (Optional)</label>
+            <input type="text" id="assign-note" name="note" class="form-control" placeholder="e.g. Try this fun counting puzzle to practice your numbers!">
+        </div>
+
+        <div>
+            <button type="submit" class="btn btn-primary" style="height: 42px;">Assign to Student</button>
+        </div>
+    </form>
+</div>
+
+<!-- Recent Sessions Table -->
+<div class="card">
+    <h2 style="margin-bottom: 1rem;">Session Activity Log</h2>
+    {% if dash_data.recent_sessions %}
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                <thead>
+                    <tr style="border-bottom: 2px solid var(--color-border); color: var(--color-text-muted);">
+                        <th style="padding: 0.5rem 0.75rem;">Activity</th>
+                        <th style="padding: 0.5rem 0.75rem;">Category</th>
+                        <th style="padding: 0.5rem 0.75rem;">Accuracy</th>
+                        <th style="padding: 0.5rem 0.75rem;">Duration</th>
+                        <th style="padding: 0.5rem 0.75rem;">Status</th>
+                        <th style="padding: 0.5rem 0.75rem;">Recorded At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in dash_data.recent_sessions %}
+                        <tr style="border-bottom: 1px solid var(--color-border);">
+                            <td style="padding: 0.75rem; font-weight: 500;">
+                                {{ s.activity.title | replace(' [Demo Data]', '') if s.activity else 'Activity' }}
+                                {% if s.activity and '[Demo Data]' in s.activity.title %}
+                                    <span class="brand-badge" style="background: #FEF3C7; color: #92400E; font-size: 0.7rem; margin-left: 0.25rem;">Demo</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 0.75rem;"><span class="brand-badge">{{ s.activity.category.name if s.activity and s.activity.category else 'General' }}</span></td>
+                            <td style="padding: 0.75rem; font-weight: 600;">{{ s.accuracy|round(1) }}%</td>
+                            <td style="padding: 0.75rem; color: var(--color-text-muted);">{{ s.duration_seconds }}s</td>
+                            <td style="padding: 0.75rem;">
+                                {% if s.status == 'completed' %}
+                                    <span class="brand-badge" style="background: #DCFCE7; color: #166534;">Completed</span>
+                                {% else %}
+                                    <span class="brand-badge" style="background: #FEF3C7; color: #92400E;">Incomplete</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding: 0.75rem; color: var(--color-text-muted);">
+                                {{ s.start_time.strftime('%b %d, %Y %I:%M %p') if s.start_time else 'Recently' }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p style="color: var(--color-text-muted); margin: 0;">No sessions recorded yet.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+{% if dash_data.snapshot.total_sessions > 0 %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const textColor = isDark ? '#94A3B8' : '#6B7280';
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)';
+
+    const catCtx = document.getElementById('categoryChart');
+    if (catCtx) {
+        new Chart(catCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ dash_data.category_labels|tojson }},
+                datasets: [{
+                    label: 'Accuracy (%)',
+                    data: {{ dash_data.category_accuracies|tojson }},
+                    backgroundColor: isDark ? 'rgba(59, 130, 246, 0.8)' : 'rgba(47, 111, 237, 0.8)',
+                    borderColor: isDark ? '#60A5FA' : '#2F6FED',
+                    borderWidth: 1.5,
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: textColor, font: { family: "'Inter', sans-serif", size: 11 } }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { color: gridColor },
+                        ticks: {
+                            color: textColor,
+                            font: { family: "'Inter', sans-serif", size: 11 },
+                            callback: v => v + '%'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: isDark ? '#1E293B' : '#0F172A',
+                        titleColor: '#F8FAFC',
+                        bodyColor: '#F8FAFC',
+                        borderColor: isDark ? '#334155' : '#E2E8F0',
+                        borderWidth: 1,
+                        padding: 10,
+                        cornerRadius: 8
+                    }
+                }
+            }
+        });
+    }
+
+    const trendCtx = document.getElementById('trendChart');
+    if (trendCtx) {
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: {{ dash_data.trend_labels|tojson }},
+                datasets: [{
+                    label: 'Accuracy',
+                    data: {{ dash_data.trend_accuracies|tojson }},
+                    borderColor: isDark ? '#34D399' : '#10B981',
+                    backgroundColor: isDark ? 'rgba(52, 211, 153, 0.15)' : 'rgba(16, 185, 129, 0.12)',
+                    tension: 0.35,
+                    fill: true,
+                    pointBackgroundColor: isDark ? '#34D399' : '#10B981',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 1.5,
+                    pointRadius: 4.5,
+                    pointHoverRadius: 6.5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: textColor, font: { family: "'Inter', sans-serif", size: 11 } }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { color: gridColor },
+                        ticks: {
+                            color: textColor,
+                            font: { family: "'Inter', sans-serif", size: 11 },
+                            callback: v => v + '%'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: isDark ? '#1E293B' : '#0F172A',
+                        titleColor: '#F8FAFC',
+                        bodyColor: '#F8FAFC',
+                        borderColor: isDark ? '#334155' : '#E2E8F0',
+                        borderWidth: 1,
+                        padding: 10,
+                        cornerRadius: 8
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
+{% endif %}
+{% endblock %}

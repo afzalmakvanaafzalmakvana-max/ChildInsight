@@ -1,0 +1,51 @@
+{% extends "base_parent.html" %}
+
+{% block title %}My Children — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1>Children Profiles</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">Manage your children's profiles and customize their learning preferences.</p>
+    </div>
+    <a href="{{ url_for('parent.child_new') }}" class="btn btn-primary">+ Add Child</a>
+</div>
+
+{% if children %}
+    <div class="grid-3">
+        {% for child in children %}
+            <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                        <h2 style="margin: 0; font-size: 1.35rem;">{{ child.name }}</h2>
+                        <span class="brand-badge">{{ child.grade or 'Not specified' }}</span>
+                    </div>
+                    <div style="font-size: 0.95rem; color: var(--color-text-muted); margin-bottom: 1.25rem;">
+                        <p style="margin-bottom: 0.35rem;"><strong>Age:</strong> {{ child.age or 'Not set' }} years old</p>
+                        <p style="margin-bottom: 0.35rem;"><strong>Language:</strong> {{ child.preferred_language }}</p>
+                    </div>
+                </div>
+
+                <div class="child-card-actions" style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; border-top: 1px solid var(--color-border); padding-top: 1rem;">
+                    <a href="{{ url_for('parent.child_detail', child_id=child.id) }}" class="btn btn-outline btn-sm">View Profile</a>
+                    <a href="{{ url_for('parent.child_edit', child_id=child.id) }}" class="btn btn-outline btn-sm">Edit</a>
+                    <a href="{{ url_for('parent.child_detail', child_id=child.id, _anchor='share-with-teacher') }}" class="btn btn-outline btn-sm">Share with Teacher</a>
+                    <form method="POST" action="{{ url_for('parent.child_delete', child_id=child.id) }}" style="margin-left: auto; display: inline-block;" onsubmit="return confirm('Are you sure you want to remove {{ child.name }}\'s profile?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline btn-sm" style="color: var(--color-danger); border-color: #FECACA;">Delete</button>
+                    </form>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="card" style="text-align: center; padding: 3.5rem 1.5rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🌱</div>
+        <h2>No child profiles yet</h2>
+        <p style="color: var(--color-text-muted); max-width: 450px; margin: 0 auto 1.5rem;">
+            Add your child's profile to track their engagement, observe learning patterns, and receive personalized activity recommendations.
+        </p>
+        <a href="{{ url_for('parent.child_new') }}" class="btn btn-primary">+ Add Child Profile</a>
+    </div>
+{% endif %}
+{% endblock %}

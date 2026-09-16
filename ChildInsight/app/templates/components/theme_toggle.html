@@ -1,0 +1,56 @@
+<!-- Light/Dark Theme Toggle Component -->
+<div class="theme-toggle-wrapper" style="display: inline-flex; align-items: center;">
+    <button type="button" id="theme-toggle-btn" class="theme-toggle-btn" aria-label="Toggle dark/light theme" title="Toggle dark/light theme">
+        <span id="theme-toggle-icon" aria-hidden="true">🌙</span>
+    </button>
+</div>
+
+<script>
+(function() {
+    var btn = document.getElementById('theme-toggle-btn');
+    var icon = document.getElementById('theme-toggle-icon');
+    if (!btn || !icon) return;
+
+    function updateToggleUI(theme) {
+        if (theme === 'dark') {
+            icon.textContent = '☀️';
+            btn.setAttribute('title', 'Switch to Light Mode');
+            btn.setAttribute('aria-label', 'Switch to Light Mode');
+        } else {
+            icon.textContent = '🌙';
+            btn.setAttribute('title', 'Switch to Dark Mode');
+            btn.setAttribute('aria-label', 'Switch to Dark Mode');
+        }
+    }
+
+    var currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+    updateToggleUI(currentTheme);
+
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        var active = document.documentElement.getAttribute('data-theme') || 'light';
+        var nextTheme = (active === 'dark') ? 'light' : 'dark';
+
+        // Apply immediately to DOM
+        document.documentElement.setAttribute('data-theme', nextTheme);
+        updateToggleUI(nextTheme);
+
+        // Store in localStorage & cookie
+        try {
+            localStorage.setItem('childinsight_theme', nextTheme);
+        } catch (err) {}
+        document.cookie = "childinsight_theme=" + nextTheme + "; path=/; max-age=31536000; SameSite=Lax";
+
+        // Persist to user account in database via API
+        fetch('/api/user/theme', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ theme: nextTheme })
+        }).catch(function(err) {
+            console.error('Failed to sync theme preference with server:', err);
+        });
+    });
+})();
+</script>

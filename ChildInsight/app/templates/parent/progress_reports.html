@@ -1,0 +1,182 @@
+{% extends "base_parent.html" %}
+
+{% block title %}Progress & Reports — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1>Progress & Learning Reports</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">Review developmental progress, domain mastery, and export official learning summary reports.</p>
+    </div>
+    {% if selected_child %}
+    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+        <a href="{{ url_for('parent.download_pdf_report', child_id=selected_child.id) }}" class="btn btn-outline btn-sm">📄 Download PDF Report</a>
+        <a href="{{ url_for('parent.download_csv_report', child_id=selected_child.id) }}" class="btn btn-outline btn-sm">📊 Download CSV Export</a>
+    </div>
+    {% endif %}
+</div>
+
+{% if not children %}
+    <!-- Empty State: No Children -->
+    <div class="card empty-state" style="text-align: center; padding: 3rem 1.5rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🌱</div>
+        <h2>No Registered Children Yet</h2>
+        <p style="color: var(--color-text-muted); max-width: 480px; margin: 0 auto 1.5rem;">
+            Add your child's profile to begin capturing learning progress, developmental milestones, and tailored recommendations.
+        </p>
+        <a href="{{ url_for('parent.child_new') }}" class="btn btn-primary">+ Add Child Profile</a>
+    </div>
+{% else %}
+    <!-- Child Selector Tabs (if parent has multiple children) -->
+    {% if children|length > 1 %}
+    <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; overflow-x: auto; padding-bottom: 0.25rem;">
+        {% for c in children %}
+        <a href="{{ url_for('parent.progress_reports', child_id=c.id) }}"
+           class="btn btn-sm {% if c.id == selected_child.id %}btn-primary{% else %}btn-outline{% endif %}"
+           style="border-radius: 9999px; text-decoration: none;">
+            👤 {{ c.name }} (Age {{ c.age or 'N/A' }})
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Selected Child Summary Bar -->
+    <div class="card" style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div style="width: 48px; height: 48px; border-radius: 50%; background: #EFF6FF; color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700;">
+                {{ selected_child.name[0] }}
+            </div>
+            <div>
+                <h2 style="margin: 0; font-size: 1.25rem;">{{ selected_child.name }}</h2>
+                <span style="color: var(--color-text-muted); font-size: 0.88rem;">
+                    Age: {{ selected_child.age or 'Not set' }} &bull; Grade: {{ selected_child.grade or 'General' }} &bull; Language: {{ selected_child.preferred_language }}
+                </span>
+            </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+            <a href="{{ url_for('parent.child_detail', child_id=selected_child.id) }}" class="btn btn-outline btn-sm">Full Profile &rarr;</a>
+            <a href="{{ url_for('parent.recommendations', child_id=selected_child.id) }}" class="btn btn-primary btn-sm">View Recommendations &rarr;</a>
+        </div>
+    </div>
+
+    <!-- Analytics Stat Cards -->
+    <div class="stats-grid" style="margin-bottom: 1.5rem;">
+        <div class="stat-card">
+            <div class="stat-label">Overall Accuracy</div>
+            <div class="stat-value" style="color: #10B981;">{{ dash_data.snapshot.overall_accuracy|default(0.0)|round(1) }}%</div>
+            <span style="font-size: 0.8rem; color: var(--color-text-muted);">Across all completed sessions</span>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Completion Rate</div>
+            <div class="stat-value" style="color: #2F6FED;">{{ dash_data.snapshot.completion_rate|default(0.0)|round(1) }}%</div>
+            <span style="font-size: 0.8rem; color: var(--color-text-muted);">{{ dash_data.snapshot.completed_sessions|default(0) }}/{{ dash_data.snapshot.total_sessions|default(0) }} sessions finished</span>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Learning Consistency</div>
+            <div class="stat-value" style="color: #8B5CF6;">{{ dash_data.snapshot.consistency|default(0.0)|round(1) }}</div>
+            <span style="font-size: 0.8rem; color: var(--color-text-muted);">Score stability metric (0–100)</span>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Engagement Index</div>
+            <div class="stat-value" style="color: #F59E0B;">{{ dash_data.snapshot.engagement_index|default(0.0)|round(1) }}</div>
+            <span style="font-size: 0.8rem; color: var(--color-text-muted);">Participation & focus level</span>
+        </div>
+    </div>
+
+    <!-- Learning Pattern Observation (K-Means Clustering) -->
+    {% if dash_data.pattern_profile %}
+    <div class="card" style="margin-bottom: 1.5rem; border-left: 4px solid #8B5CF6; background: var(--color-bg-card);">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span style="font-size: 1.35rem;">🧩</span>
+            <h3 style="margin: 0;">Interactive Learning Pattern Insight</h3>
+        </div>
+        <div style="font-weight: 600; color: #8B5CF6; font-size: 0.95rem; margin-bottom: 0.35rem;">
+            {{ dash_data.pattern_profile.cluster_label }}
+        </div>
+        <p style="color: var(--color-text-main); margin: 0; font-size: 0.92rem; line-height: 1.5;">
+            {{ dash_data.pattern_profile.observation }}
+        </p>
+    </div>
+    {% endif %}
+
+    <!-- Cognitive Domain Breakdown -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <h3 style="margin-top: 0; margin-bottom: 1rem;">Cognitive Category Breakdown</h3>
+        <p style="color: var(--color-text-muted); font-size: 0.88rem; margin-bottom: 1.25rem;">
+            Skill mastery and activity participation per developmental domain:
+        </p>
+        <div class="grid-3">
+            {% for key, cat in dash_data.snapshot.category_breakdown.items() %}
+            <div style="border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1rem; background: var(--color-bg);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <strong>{{ cat.name }}</strong>
+                    <span class="brand-badge" style="font-size: 0.78rem;">{{ cat.sessions_count }} session(s)</span>
+                </div>
+                <div style="font-size: 1.4rem; font-weight: 700; color: var(--color-primary); margin-bottom: 0.35rem;">
+                    {{ cat.accuracy|default(0.0)|round(1) }}%
+                </div>
+                <div style="width: 100%; height: 6px; background: var(--color-border); border-radius: 3px; overflow: hidden;">
+                    <div style="width: {{ cat.accuracy|default(0.0) }}%; height: 100%; background: var(--color-primary); border-radius: 3px;"></div>
+                </div>
+                <div style="font-size: 0.78rem; color: var(--color-text-muted); margin-top: 0.4rem;">
+                    Sessions: {{ cat.sessions_count|default(0) }} &bull; Domain: {{ cat.name }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Recent Learning Sessions History -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+            <h3 style="margin: 0;">Recent Learning Sessions</h3>
+            <span style="color: var(--color-text-muted); font-size: 0.85rem;">Showing last {{ dash_data.recent_sessions|length }} recorded attempts</span>
+        </div>
+        {% if dash_data.recent_sessions %}
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--color-border); text-align: left; color: var(--color-text-muted);">
+                        <th style="padding: 0.75rem 0.5rem;">Activity</th>
+                        <th style="padding: 0.75rem 0.5rem;">Category</th>
+                        <th style="padding: 0.75rem 0.5rem;">Difficulty</th>
+                        <th style="padding: 0.75rem 0.5rem;">Accuracy</th>
+                        <th style="padding: 0.75rem 0.5rem;">Status</th>
+                        <th style="padding: 0.75rem 0.5rem;">Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in dash_data.recent_sessions %}
+                    <tr style="border-bottom: 1px solid var(--color-border);">
+                        <td style="padding: 0.75rem 0.5rem; font-weight: 500;">{{ s.activity.title if s.activity else 'Activity #' ~ s.activity_id }}</td>
+                        <td style="padding: 0.75rem 0.5rem; color: var(--color-text-muted);">{{ s.activity.category.name if s.activity and s.activity.category else '—' }}</td>
+                        <td style="padding: 0.75rem 0.5rem;">
+                            <span class="brand-badge" style="font-size: 0.75rem;">{{ s.activity.difficulty if s.activity else '—' }}</span>
+                        </td>
+                        <td style="padding: 0.75rem 0.5rem; font-weight: 600; color: #10B981;">{{ s.accuracy|round(1) }}%</td>
+                        <td style="padding: 0.75rem 0.5rem;">
+                            {% if s.status == 'completed' %}
+                                <span class="badge badge-success" style="font-size: 0.75rem;">Completed</span>
+                            {% else %}
+                                <span class="badge badge-neutral" style="font-size: 0.75rem;">{{ s.status|capitalize }}</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 0.75rem 0.5rem; color: var(--color-text-muted); font-size: 0.82rem;">
+                            {{ s.start_time.strftime('%b %d, %Y') if s.start_time else '—' }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color: var(--color-text-muted); margin: 0; font-size: 0.9rem;">No learning sessions recorded yet for {{ selected_child.name }}.</p>
+        {% endif %}
+    </div>
+
+    <!-- Responsible Use Notice -->
+    <div style="background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1rem 1.25rem; font-size: 0.82rem; color: var(--color-text-muted); line-height: 1.45;">
+        <strong>Responsible Educational Use Notice:</strong> ChildInsight analytics and learning observations are purely designed to support personalized growth and celebrate learning milestones. These records are not clinical assessments or formal educational diagnoses.
+    </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,50 @@
+CHILDINSIGHT EDUCATIONAL PROGRESS REPORT
+Generated At,2026-09-12T09:40:16.057270+00:00
+Reporting Range,all
+
+STUDENT PROFILE
+Child ID,1
+Name,Leo [Demo Data]
+Age,6
+Grade,1st Grade
+Preferred Language,English
+
+OVERALL ANALYTICS SUMMARY
+Metric,Value,Description
+Overall Accuracy,83.33%,Weighted accuracy by question attempts
+Completion Rate,100.00%,Percentage of initiated sessions completed
+Consistency Score,67.49,Score out of 100 based on standard deviation
+Engagement Index,86.25,Multi-signal engagement score
+Composite Performance Score,83.50,Weighted formula (60% Acc + 20% Comp + 20% Cons)
+
+LEARNING PATTERN ENGINE (ML)
+Pattern Group,Visual + Memory Strong Interaction
+Observation,Recent sessions show stronger engagement in visual activities.
+
+CATEGORY BREAKDOWN
+Category Name,Slug,Accuracy (%),Sessions Count
+Visual Learning,visual,100.00,2
+Logic,logic,66.67,1
+Numbers,numbers,66.67,1
+Language,language,0.00,0
+Memory,memory,83.33,2
+
+SESSION LOG
+Session ID,Activity Title,Category,Difficulty,Attempts,Correct,Accuracy (%),Duration (s),Status,Date
+42,Count the Items [Demo Data],Numbers,Beginner,3,2,70.00,120,completed,2026-09-12T03:54:40.034594
+41,Animal Friends [Demo Data],Logic,Beginner,3,2,60.00,120,completed,2026-09-11T03:54:40.034594
+40,Object Memory [Demo Data],Memory,Beginner,3,2,85.00,120,completed,2026-09-10T03:54:40.034594
+38,Shape Explorer [Demo Data],Visual Learning,Beginner,3,3,90.00,120,completed,2026-09-09T03:54:40.034594
+39,Fruit Recall [Demo Data],Memory,Beginner,3,3,100.00,120,completed,2026-09-09T03:54:40.034594
+37,Color Match Adventure [Demo Data],Visual Learning,Beginner,3,3,100.00,120,completed,2026-09-08T03:54:40.034594
+
+RECOMMENDATIONS
+Priority,Activity Title,Category,Difficulty,Recommendation Type,Reason
+1,Pattern Spotter [Demo Data],Visual Learning,Easy,level_up,High accuracy (100%) and strong completion (100%) in Visual Learning demonstrate readiness for Easy level. Let's try Pattern Spotter [Demo Data] in Visual Learning.
+2,Sequence Recall [Demo Data],Memory,Easy,level_up,High accuracy (83%) and strong completion (100%) in Memory demonstrate readiness for Easy level. Let's try Sequence Recall [Demo Data] in Memory.
+3,Animal Friends [Demo Data],Logic,Beginner,reinforce,"Balanced engagement in Logic (67% accuracy, 100% completion). Keep reinforcing skills at Beginner level. Let's try Animal Friends [Demo Data] in Logic."
+4,Count the Items [Demo Data],Numbers,Beginner,reinforce,"Balanced engagement in Numbers (67% accuracy, 100% completion). Keep reinforcing skills at Beginner level. Let's try Count the Items [Demo Data] in Numbers."
+5,Letter Sounds [Demo Data],Language,Beginner,explore,Expand your curiosity! Explore Language (0 sessions completed so far) with an engaging introductory Beginner activity.
+
+RESPONSIBLE-USE NOTICE
+"Responsible-Use Notice: ChildInsight observes educational interaction patterns to offer learning insights. It does not evaluate, assess, or diagnose any medical or psychological condition. If persistent learning challenges are observed, discuss them gently with a qualified educator or counsellor."

@@ -1,0 +1,377 @@
+{% extends "base_parent.html" %}
+
+{% block title %}Parent Dashboard — ChildInsight{% endblock %}
+
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+.child-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+}
+.child-tab {
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+.child-tab.active {
+    background: var(--color-primary);
+    color: #ffffff;
+    border-color: var(--color-primary);
+}
+.pattern-callout {
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+}
+.pattern-icon {
+    font-size: 1.8rem;
+    line-height: 1;
+}
+.badge-level-up { background: #DCFCE7; color: #166534; }
+.badge-reinforce { background: #E0E7FF; color: #3730A3; }
+.badge-practice { background: #FEF3C7; color: #92400E; }
+.badge-explore { background: #F3E8FF; color: #6B21A8; }
+.chart-container {
+    position: relative;
+    height: 260px;
+    width: 100%;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1>Parent Dashboard</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">Observe learning patterns, review progress insights, and discover tailored activities.</p>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+        {% if selected_child %}
+            <a href="{{ url_for('parent.download_pdf_report', child_id=selected_child.id) }}" class="btn btn-outline btn-sm">📄 Export PDF</a>
+            <a href="{{ url_for('parent.download_csv_report', child_id=selected_child.id) }}" class="btn btn-outline btn-sm">📊 Export CSV</a>
+        {% endif %}
+        <a href="{{ url_for('parent.child_new') }}" class="btn btn-primary btn-sm">+ Add Child</a>
+    </div>
+</div>
+
+{% if not children %}
+    <!-- Empty State: No Children Registered -->
+    <div class="card" style="text-align: center; padding: 3.5rem 1.5rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🌱</div>
+        <h2>Welcome to ChildInsight!</h2>
+        <p style="color: var(--color-text-muted); max-width: 480px; margin: 0.5rem auto 1.5rem;">
+            Add your child's profile to begin observing their learning interactions, engagement patterns, and tailored educational recommendations.
+        </p>
+        <a href="{{ url_for('parent.child_new') }}" class="btn btn-primary">+ Register First Child</a>
+    </div>
+{% else %}
+
+    <!-- Child Selector Tabs -->
+    {% if children|length > 1 %}
+    <div class="child-tabs">
+        {% for ch in children %}
+            <a href="{{ url_for('parent.dashboard', child_id=ch.id) }}" class="child-tab {% if ch.id == selected_child.id %}active{% endif %}">
+                👦 {{ ch.name | replace(' [Demo Data]', '') }}
+                {% if '[Demo Data]' in ch.name %}
+                    <span class="brand-badge" style="background: #FEF3C7; color: #92400E; font-size: 0.7rem; padding: 0.15rem 0.45rem; margin-left: 0.25rem;">Demo</span>
+                {% endif %}
+            </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Summary Metrics Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Overall Performance</div>
+            <div class="stat-value">{{ dash_data.snapshot.performance_score|round(1) }} <span style="font-size: 1rem; color: var(--color-text-muted);">/ 100</span></div>
+            <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0.25rem 0 0;">Weighted accuracy & consistency</p>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Engagement Index</div>
+            <div class="stat-value">{{ dash_data.snapshot.engagement_index|round(1) }} <span style="font-size: 1rem; color: var(--color-text-muted);">/ 100</span></div>
+            <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0.25rem 0 0;">Multi-signal persistence & curiosity</p>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Completed Sessions</div>
+            <div class="stat-value">{{ dash_data.snapshot.completed_sessions }} <span style="font-size: 1rem; color: var(--color-text-muted);">of {{ dash_data.snapshot.total_sessions }}</span></div>
+            <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0.25rem 0 0;">{{ dash_data.snapshot.completion_rate|round(1) }}% completion rate</p>
+        </div>
+    </div>
+
+    <!-- Learning Pattern Engine Observation (Phase 7) -->
+    <div class="pattern-callout">
+        <div class="pattern-icon">🧠</div>
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                <strong style="color: #1E40AF; font-size: 0.95rem;">Learning Pattern Group:</strong>
+                <span class="brand-badge" style="background: #DBEAFE; color: #1E40AF; font-weight: 600;">{{ dash_data.pattern_profile.pattern_group }}</span>
+            </div>
+            <p style="margin: 0; color: #1E3A8A; font-size: 0.95rem; line-height: 1.4;">
+                {{ dash_data.pattern_profile.observation }}
+            </p>
+        </div>
+    </div>
+
+    {% if dash_data.snapshot.total_sessions == 0 %}
+        <!-- Empty State: Child Has No Sessions Yet -->
+        <div class="empty-state">
+            <div class="empty-state-icon">🧩</div>
+            <h3 class="empty-state-title">No activity history yet for {{ selected_child.name }}</h3>
+            <p class="empty-state-text">
+                {{ selected_child.name }} hasn't played any activities yet. Start exploring fun, interactive games to see real-time learning insights!
+            </p>
+            <a href="{{ url_for('child.categories_hub', child_id=selected_child.id) }}" class="btn btn-primary" target="_blank">Open Activity Hub &rarr;</a>
+        </div>
+    {% else %}
+
+        <!-- Charts Grid (Category Breakdown + Session Progression Trend) -->
+        <div class="grid-2" style="margin-bottom: 1.5rem;">
+            <div class="card">
+                <h3 style="margin-bottom: 0.5rem;">Domain Performance</h3>
+                <p style="color: var(--color-text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Average accuracy across 5 educational categories</p>
+                <div class="chart-container">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h3 style="margin-bottom: 0.5rem;">Session Progress Trend</h3>
+                <p style="color: var(--color-text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Accuracy trend across recent completed sessions</p>
+                <div class="chart-container">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+    {% endif %}
+
+    <!-- Recommendations Section (Phase 6) -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <div>
+                <h2 style="margin: 0;">Tailored Recommendations</h2>
+                <p style="color: var(--color-text-muted); font-size: 0.85rem; margin: 0.25rem 0 0;">Carefully selected next activities with visible educational reasoning.</p>
+            </div>
+            <span class="brand-badge" style="background: #F3F4F6; color: var(--color-text-muted);">{{ dash_data.recommendations|length }} suggestions</span>
+        </div>
+
+        {% if dash_data.recommendations %}
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                {% for rec in dash_data.recommendations %}
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
+                        <div style="flex: 1; padding-right: 1rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                                <span style="font-weight: 700; color: var(--color-text-muted); font-size: 0.85rem;">#{{ rec.priority }}</span>
+                                <strong style="font-size: 1.05rem;">{{ rec.activity_title | replace(' [Demo Data]', '') }}</strong>
+                                {% if '[Demo Data]' in rec.activity_title %}
+                                    <span class="brand-badge" style="background: #FEF3C7; color: #92400E; font-size: 0.72rem;">Demo Data</span>
+                                {% endif %}
+                                <span class="brand-badge">{{ rec.category_name }}</span>
+                                <span class="brand-badge" style="background: #F3F4F6; color: #4B5563;">{{ rec.difficulty }}</span>
+                                <span class="brand-badge badge-{{ rec.recommendation_type }}">{{ rec.recommendation_type|replace('_', ' ')|capitalize }}</span>
+                            </div>
+                            <p style="margin: 0; font-size: 0.9rem; color: var(--color-text-main); line-height: 1.35;">
+                                💡 {{ rec.reason }}
+                            </p>
+                        </div>
+                        <div>
+                            <a href="{{ url_for('child.player', child_id=selected_child.id, activity_id=rec.activity_id) }}" class="btn btn-outline btn-sm" target="_blank">Play &rarr;</a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p style="color: var(--color-text-muted); margin: 0;">No active recommendations available yet.</p>
+        {% endif %}
+    </div>
+
+    <!-- Recent Sessions History -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2>Recent Activity Sessions</h2>
+            <a href="{{ url_for('parent.child_detail', child_id=selected_child.id) }}" class="btn btn-outline btn-sm">Full Profile &rarr;</a>
+        </div>
+        {% if dash_data.recent_sessions %}
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--color-border); color: var(--color-text-muted);">
+                            <th style="padding: 0.5rem 0.75rem;">Activity</th>
+                            <th style="padding: 0.5rem 0.75rem;">Domain</th>
+                            <th style="padding: 0.5rem 0.75rem;">Accuracy</th>
+                            <th style="padding: 0.5rem 0.75rem;">Duration</th>
+                            <th style="padding: 0.5rem 0.75rem;">Status</th>
+                            <th style="padding: 0.5rem 0.75rem;">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in dash_data.recent_sessions %}
+                            <tr style="border-bottom: 1px solid var(--color-border);">
+                                <td style="padding: 0.75rem; font-weight: 500;">
+                                    {{ s.activity.title | replace(' [Demo Data]', '') if s.activity else 'Activity' }}
+                                    {% if s.activity and '[Demo Data]' in s.activity.title %}
+                                        <span class="brand-badge" style="background: #FEF3C7; color: #92400E; font-size: 0.7rem; margin-left: 0.25rem;">Demo</span>
+                                    {% endif %}
+                                </td>
+                                <td style="padding: 0.75rem;"><span class="brand-badge">{{ s.activity.category.name if s.activity and s.activity.category else 'General' }}</span></td>
+                                <td style="padding: 0.75rem; font-weight: 600;">{{ s.accuracy|round(1) }}%</td>
+                                <td style="padding: 0.75rem; color: var(--color-text-muted);">{{ s.duration_seconds }}s</td>
+                                <td style="padding: 0.75rem;">
+                                    {% if s.status == 'completed' %}
+                                        <span class="brand-badge" style="background: #DCFCE7; color: #166534;">Completed</span>
+                                    {% elif s.status == 'abandoned' %}
+                                        <span class="brand-badge" style="background: #FEE2E2; color: #991B1B;">Early Exit</span>
+                                    {% else %}
+                                        <span class="brand-badge" style="background: #FEF3C7; color: #92400E;">In Progress</span>
+                                    {% endif %}
+                                </td>
+                                <td style="padding: 0.75rem; color: var(--color-text-muted);">
+                                    {{ s.start_time.strftime('%b %d, %H:%M') if s.start_time else 'Recently' }}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p style="color: var(--color-text-muted); margin: 0;">No sessions recorded yet.</p>
+        {% endif %}
+    </div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts_extra %}
+{% if selected_child and dash_data.snapshot.total_sessions > 0 %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const textColor = isDark ? '#94A3B8' : '#6B7280';
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)';
+
+    // 1. Domain Performance Bar Chart
+    const catCtx = document.getElementById('categoryChart');
+    if (catCtx) {
+        new Chart(catCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ dash_data.category_labels|tojson }},
+                datasets: [{
+                    label: 'Accuracy (%)',
+                    data: {{ dash_data.category_accuracies|tojson }},
+                    backgroundColor: isDark ? 'rgba(59, 130, 246, 0.8)' : 'rgba(47, 111, 237, 0.8)',
+                    borderColor: isDark ? '#60A5FA' : '#2F6FED',
+                    borderWidth: 1.5,
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: textColor, font: { family: "'Inter', sans-serif", size: 11 } }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { color: gridColor },
+                        ticks: {
+                            color: textColor,
+                            font: { family: "'Inter', sans-serif", size: 11 },
+                            callback: v => v + '%'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: isDark ? '#1E293B' : '#0F172A',
+                        titleColor: '#F8FAFC',
+                        bodyColor: '#F8FAFC',
+                        borderColor: isDark ? '#334155' : '#E2E8F0',
+                        borderWidth: 1,
+                        padding: 10,
+                        cornerRadius: 8
+                    }
+                }
+            }
+        });
+    }
+
+    // 2. Session Progress Trend Line Chart
+    const trendCtx = document.getElementById('trendChart');
+    if (trendCtx) {
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: {{ dash_data.trend_labels|tojson }},
+                datasets: [{
+                    label: 'Session Accuracy',
+                    data: {{ dash_data.trend_accuracies|tojson }},
+                    borderColor: isDark ? '#34D399' : '#10B981',
+                    backgroundColor: isDark ? 'rgba(52, 211, 153, 0.15)' : 'rgba(16, 185, 129, 0.12)',
+                    tension: 0.35,
+                    fill: true,
+                    pointBackgroundColor: isDark ? '#34D399' : '#10B981',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 1.5,
+                    pointRadius: 4.5,
+                    pointHoverRadius: 6.5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: textColor, font: { family: "'Inter', sans-serif", size: 11 } }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { color: gridColor },
+                        ticks: {
+                            color: textColor,
+                            font: { family: "'Inter', sans-serif", size: 11 },
+                            callback: v => v + '%'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: isDark ? '#1E293B' : '#0F172A',
+                        titleColor: '#F8FAFC',
+                        bodyColor: '#F8FAFC',
+                        borderColor: isDark ? '#334155' : '#E2E8F0',
+                        borderWidth: 1,
+                        padding: 10,
+                        cornerRadius: 8
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
+{% endif %}
+{% endblock %}

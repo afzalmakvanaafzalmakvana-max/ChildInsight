@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}API Documentation & Explorer — ChildInsight{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+<style>
+    /* Custom adjustments for Swagger UI to harmonize with ChildInsight design system */
+    .api-docs-header {
+        margin-bottom: 2rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid var(--color-border);
+    }
+    .api-docs-header h1 {
+        font-size: 2rem;
+        font-weight: 800;
+        color: var(--color-text-main);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.5rem;
+    }
+    .api-docs-subtitle {
+        color: var(--color-text-muted);
+        font-size: 1.05rem;
+        margin-bottom: 1rem;
+    }
+    .api-actions {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+    #swagger-ui {
+        background: #ffffff;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+        padding: 1.5rem;
+        border: 1px solid var(--color-border);
+    }
+    /* Ensure Swagger fonts blend well with Inter */
+    .swagger-ui, .swagger-ui .info .title, .swagger-ui .opblock-tag {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    }
+    .swagger-ui .topbar {
+        display: none !important;
+    }
+    .swagger-ui .wrapper {
+        padding: 0 !important;
+        max-width: 100% !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="container" style="padding-top: 2rem; padding-bottom: 4rem;">
+    <div class="api-docs-header">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <h1><span>⚡</span> ChildInsight REST API Explorer</h1>
+                <p class="api-docs-subtitle">
+                    Live interactive API documentation powered by OpenAPI 3.0.3 & Swagger UI. Test endpoints directly in your browser.
+                </p>
+            </div>
+            <div class="api-actions">
+                <a href="{{ url_for('api.get_openapi_json') }}" target="_blank" class="btn btn-outline btn-sm">
+                    📄 OpenAPI JSON
+                </a>
+                <a href="https://github.com/childinsight/childinsight/blob/main/docs/API.md" target="_blank" class="btn btn-outline btn-sm">
+                    📖 docs/API.md
+                </a>
+            </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem;">
+            <span class="badge badge-success">OpenAPI 3.0.3</span>
+            <span class="badge badge-primary">Base: /api</span>
+            <span class="badge badge-secondary">Zero Build Tools</span>
+        </div>
+    </div>
+
+    <!-- Swagger UI Mount Container -->
+    <div id="swagger-ui">
+        <div style="text-align: center; padding: 3rem; color: var(--color-text-muted);">
+            <div class="spinner" style="margin: 0 auto 1rem auto;"></div>
+            <p>Loading API specification...</p>
+        </div>
+    </div>
+</main>
+
+<!-- Swagger UI CDN Scripts -->
+<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+<script>
+    window.addEventListener('load', function() {
+        const ui = SwaggerUIBundle({
+            url: "{{ url_for('api.get_openapi_json') }}",
+            dom_id: '#swagger-ui',
+            deepLinking: true,
+            presets: [
+                SwaggerUIBundle.presets.apis,
+                SwaggerUIStandalonePreset
+            ],
+            plugins: [
+                SwaggerUIBundle.plugins.DownloadUrl
+            ],
+            layout: "BaseLayout",
+            docExpansion: "list",
+            defaultModelsExpandDepth: 1,
+            defaultModelExpandDepth: 1,
+            showExtensions: true,
+            showCommonExtensions: true,
+            supportedSubmitMethods: ['get', 'post', 'put', 'delete', 'patch']
+        });
+        window.ui = ui;
+    });
+</script>
+{% endblock %}

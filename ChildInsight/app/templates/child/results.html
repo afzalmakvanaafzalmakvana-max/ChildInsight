@@ -1,0 +1,53 @@
+{% extends "base_child.html" %}
+
+{% block title %}High Five! — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="child-card" style="max-width: 650px; margin: 2rem auto; text-align: center;">
+    <div class="celebration-icon" style="font-size: 4.5rem; margin-bottom: 0.75rem;">🎉</div>
+    <h1 style="font-size: 2.5rem; color: var(--color-child-accent); margin-bottom: 0.75rem;">
+        {{ t('high_five', name=child.name) }}
+    </h1>
+    <p style="font-size: 1.25rem; color: #4B5563; margin-bottom: 1.75rem;">
+        {{ t('you_completed', title=activity.get_title(child_lang)) }}
+    </p>
+
+    <!-- Friendly Encouragement Animated Stars -->
+    <div style="font-size: 3rem; margin-bottom: 1.5rem; display: flex; justify-content: center; gap: 0.5rem;">
+        {% if score >= total_q %}
+            <span class="star-animated">⭐</span>
+            <span class="star-animated">⭐</span>
+            <span class="star-animated">⭐</span>
+        {% elif score >= 1 %}
+            <span class="star-animated">⭐</span>
+            <span class="star-animated">⭐</span>
+        {% else %}
+            <span class="star-animated">⭐</span>
+        {% endif %}
+    </div>
+
+    <div style="background: #F5F3FF; border: 2px dashed #DDD6FE; border-radius: 16px; padding: 1.5rem; margin-bottom: 2.5rem;">
+        <p style="font-size: 1.15rem; color: #5B21B6; margin: 0; font-weight: 600;">
+            {% if score == total_q %}
+                {{ t('results_all_correct') }}
+            {% elif score > 0 %}
+                {{ t('results_good_effort') }}
+            {% else %}
+                {{ t('results_great_try') }}
+            {% endif %}
+        </p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 1rem; max-width: 380px; margin: 0 auto;">
+        <a href="{{ url_for('child.player', child_id=child.id, activity_id=activity.id, q=0) }}" class="btn child-btn child-btn-purple" style="text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            {{ t('play_again') }}
+        </a>
+        <a href="{{ url_for('child.activity_list', child_id=child.id, category_id=activity.category_id) }}" class="btn child-btn child-btn-coral" style="text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            {{ t('back_to_activities') }}
+        </a>
+        <a href="{{ url_for('child.categories_hub', child_id=child.id) }}" class="btn child-btn child-btn-yellow" style="text-decoration: none; display: flex; align-items: center; justify-content: center;">
+            {{ t('back_to_categories') }}
+        </a>
+    </div>
+</div>
+{% endblock %}

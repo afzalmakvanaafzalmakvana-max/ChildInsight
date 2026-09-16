@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Parent Dashboard — ChildInsight{% endblock %}
+
+{% block navbar %}
+<nav class="navbar">
+    <div class="container navbar-inner">
+        <a href="{{ url_for('parent.dashboard') }}" class="brand">
+            <span>🌱 ChildInsight</span>
+            <span class="brand-badge">Parent Portal</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="{{ url_for('parent.dashboard') }}" class="nav-link{% if request.endpoint == 'parent.dashboard' %} active{% endif %}">Dashboard</a></li>
+            <li><a href="{{ url_for('parent.children_list') }}" class="nav-link{% if request.endpoint in ['parent.children_list', 'parent.child_new', 'parent.child_detail', 'parent.child_edit'] %} active{% endif %}">Children</a></li>
+            <li><a href="{{ url_for('parent.progress_reports') }}" class="nav-link{% if request.endpoint in ['parent.progress_reports', 'parent.download_pdf_report', 'parent.download_csv_report'] %} active{% endif %}">Progress & Reports</a></li>
+            <li><a href="{{ url_for('parent.recommendations') }}" class="nav-link{% if request.endpoint == 'parent.recommendations' %} active{% endif %}">Recommendations</a></li>
+        </ul>
+        <div class="nav-actions">
+            {% include 'components/theme_toggle.html' %}
+            {% include 'components/notification_bell.html' %}
+            <span class="nav-user-label" title="{{ current_user.name }}">
+                {{ current_user.name }}
+            </span>
+            <a href="{{ url_for('auth.logout') }}" class="btn btn-outline btn-sm">Sign Out</a>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1>Welcome, {{ current_user.name }}</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">Manage your children's learning journeys, review progress insights, and discover tailored activities.</p>
+    </div>
+    <a href="{{ url_for('parent.child_new') }}" class="btn btn-primary">+ Add Child</a>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Registered Children</div>
+        <div class="stat-value">{{ current_user.children.count() if current_user.children else 0 }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Active Learning Sessions</div>
+        <div class="stat-value">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Practice Focus Areas</div>
+        <div class="stat-value">—</div>
+    </div>
+</div>
+
+<div class="card">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+        <h2>Registered Children</h2>
+        <a href="{{ url_for('parent.children_list') }}" class="btn btn-outline btn-sm">View All &rarr;</a>
+    </div>
+    {% if children %}
+        <div class="grid-3" style="margin: 1rem 0 0 0;">
+            {% for child in children %}
+                <div style="background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1.25rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <strong style="font-size: 1.1rem;">{{ child.name }}</strong>
+                        <span class="brand-badge">{{ child.grade or 'Grade N/A' }}</span>
+                    </div>
+                    <p style="color: var(--color-text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+                        Age: {{ child.age or 'Not set' }} &bull; {{ child.preferred_language }}
+                    </p>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <a href="{{ url_for('parent.child_detail', child_id=child.id) }}" class="btn btn-primary btn-sm" style="flex: 1; text-align: center;">View Profile</a>
+                        <a href="{{ url_for('parent.child_detail', child_id=child.id, _anchor='share-with-teacher') }}" class="btn btn-outline btn-sm" style="flex: 1; text-align: center;">Share with Teacher</a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p style="color: var(--color-text-muted); margin-bottom: 1.25rem;">No children registered yet.</p>
+        <a href="{{ url_for('parent.child_new') }}" class="btn btn-primary btn-sm">+ Add First Child Profile</a>
+    {% endif %}
+</div>
+{% endblock %}

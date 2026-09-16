@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ current_user.theme_preference if (current_user.is_authenticated and current_user.role != 'child') else (request.cookies.get('childinsight_theme', 'light')) }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ChildInsight — Intelligent Learning & Development Guidance{% endblock %}</title>
+    <!-- Anti-flicker theme init script -->
+    <script>
+        (function() {
+            var theme = document.documentElement.getAttribute('data-theme');
+            if (!theme) {
+                try {
+                    theme = localStorage.getItem('childinsight_theme');
+                } catch (e) {}
+            }
+            if (theme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
+    </script>
+    <!-- Google Fonts: Inter & Poppins -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+    <!-- Design System CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+    {% block head_extra %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+
+    <!-- Navigation Header -->
+    {% block navbar %}
+    <nav class="navbar">
+        <div class="container navbar-inner">
+            <a href="{{ url_for('auth.index') }}" class="brand">
+                <span>🌱 ChildInsight</span>
+            </a>
+            <div class="nav-actions">
+                {% if current_user.is_authenticated %}
+                    {% if current_user.role == 'parent' %}
+                        <a href="{{ url_for('parent.dashboard') }}" class="nav-link">Parent Dashboard</a>
+                    {% elif current_user.role == 'teacher' %}
+                        <a href="{{ url_for('teacher.dashboard') }}" class="nav-link">Teacher Dashboard</a>
+                    {% elif current_user.role == 'admin' %}
+                        <a href="{{ url_for('admin.dashboard') }}" class="nav-link">Admin Console</a>
+                    {% elif current_user.role == 'child' %}
+                        <a href="{{ url_for('child.home') }}" class="nav-link">Play</a>
+                    {% endif %}
+                    {% if current_user.role in ['parent', 'teacher', 'admin'] %}
+                        {% include 'components/theme_toggle.html' %}
+                        {% include 'components/notification_bell.html' %}
+                    {% endif %}
+                    <span class="nav-user-label" title="{{ current_user.name }} ({{ current_user.role|capitalize }})">
+                        {{ current_user.name }} <span style="opacity: 0.75; font-weight: 500;">({{ current_user.role|capitalize }})</span>
+                    </span>
+                    <a href="{{ url_for('auth.logout') }}" class="btn btn-outline btn-sm">Sign Out</a>
+                {% else %}
+                    {% include 'components/theme_toggle.html' %}
+                    <a href="{{ url_for('auth.login') }}" class="btn btn-outline btn-sm">Sign In</a>
+                    <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-sm">Get Started</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+    {% endblock %}
+
+    <!-- Flash Messages Container -->
+    <div class="container alerts-container" style="margin-top: 1.5rem;">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">
+                        <span>{{ message }}</span>
+                        <button type="button" class="alert-close" style="background:none; border:none; cursor:pointer; font-size:1.1rem; color:inherit;">&times;</button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Main Body Content -->
+    <main class="main-content">
+        <div class="container">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- Global Footer -->
+    {% block footer %}
+    <footer class="footer">
+        <div class="container footer-inner">
+            <div>
+                <strong>ChildInsight</strong> — Observe. Understand. Guide.
+                <div class="footer-disclaimer">
+                    <strong>Responsible-Use Notice:</strong> ChildInsight observes educational interaction patterns to offer learning insights.
+                    It does not evaluate, assess, or diagnose any medical or psychological condition.
+                </div>
+            </div>
+            <div>
+                <p style="margin: 0;">&copy; 2026 ChildInsight. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+    {% endblock %}
+
+    <!-- Core Scripts -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts_extra %}{% endblock %}
+</body>
+</html>

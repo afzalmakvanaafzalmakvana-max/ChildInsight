@@ -1,0 +1,170 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Activity Management — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1>Educational Activities</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">Manage interactive learning activities, questions, difficulty tiers, and active status.</p>
+    </div>
+    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+        <a href="{{ url_for('admin.activity_ai_draft_form') }}" class="btn btn-outline btn-sm" style="border-color: var(--color-primary); color: var(--color-primary);">
+            🤖 Generate with AI (Draft)
+        </a>
+        <a href="{{ url_for('admin.activity_create') }}" class="btn btn-primary btn-sm">➕ Add Activity</a>
+    </div>
+</div>
+
+<!-- Search & Filter Controls -->
+<div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
+    <form method="GET" action="{{ url_for('admin.activities_list') }}" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+        <div style="flex: 2; min-width: 220px;">
+            <label for="act-search" class="form-label" style="font-size: 0.85rem;">Search Activities</label>
+            <input type="text" id="act-search" name="q" value="{{ current_q or '' }}" class="form-control" placeholder="Search by activity title...">
+        </div>
+
+        <div style="flex: 1; min-width: 170px;">
+            <label for="cat-filter" class="form-label" style="font-size: 0.85rem;">Category</label>
+            <select id="cat-filter" name="category_id" class="form-control">
+                <option value="">-- All Categories --</option>
+                {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if current_category_id == cat.id %}selected{% endif %}>{{ cat.icon }} {{ cat.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="min-width: 140px;">
+            <label for="diff-filter" class="form-label" style="font-size: 0.85rem;">Difficulty</label>
+            <select id="diff-filter" name="difficulty" class="form-control">
+                <option value="">-- All Levels --</option>
+                {% for diff in difficulties %}
+                    <option value="{{ diff }}" {% if current_difficulty == diff %}selected{% endif %}>{{ diff }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="min-width: 130px;">
+            <label for="status-filter" class="form-label" style="font-size: 0.85rem;">Status</label>
+            <select id="status-filter" name="status" class="form-control">
+                <option value="">-- All Statuses --</option>
+                <option value="active" {% if current_status == 'active' %}selected{% endif %}>Active</option>
+                <option value="inactive" {% if current_status == 'inactive' %}selected{% endif %}>Inactive</option>
+            </select>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem;">
+            <button type="submit" class="btn btn-primary btn-sm" style="height: 42px;">Filter</button>
+            {% if current_q or current_category_id or current_difficulty or current_status %}
+                <a href="{{ url_for('admin.activities_list') }}" class="btn btn-outline btn-sm" style="height: 42px; display: flex; align-items: center;">Clear</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<!-- Activities Table -->
+<div class="card table-responsive-container" style="padding: 0;">
+    {% if activities %}
+    <table class="admin-data-table">
+        <thead>
+            <tr>
+                <th class="col-sticky" style="min-width: 260px;">Activity &amp; Category</th>
+                <th style="text-align: center;">Difficulty</th>
+                <th style="text-align: center;">Questions</th>
+                <th style="text-align: center;">Sessions</th>
+                <th style="text-align: center;">Status</th>
+                <th style="text-align: right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for act in activities %}
+                {% set q_count = act.questions.count() %}
+                {% set sess_count = act.sessions.count() %}
+                <tr>
+                    <td class="col-sticky" style="min-width: 260px; max-width: 360px;">
+                        <strong class="admin-table-title" title="{{ act.title }}">{{ act.title }}</strong>
+                        <div class="admin-table-meta">
+                            <span class="brand-badge badge-neutral" style="font-size: 0.72rem; padding: 0.15rem 0.45rem;">
+                                {{ act.category.icon or '📂' }} {{ act.category.name }}
+                            </span>
+                            <span class="brand-badge badge-neutral" style="font-size: 0.72rem; padding: 0.15rem 0.45rem;">Ages {{ act.age_band }}</span>
+                            <span style="color: var(--color-text-muted); font-size: 0.75rem;">⏱ ~{{ act.estimated_duration }}m</span>
+                            {% if act.is_demo %}
+                                <span class="brand-badge badge-warning" style="font-size: 0.72rem; padding: 0.15rem 0.45rem;">Demo</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td style="text-align: center;">
+                        {% if act.difficulty == 'Beginner' %}
+                            <span class="brand-badge badge-sky">Beginner</span>
+                        {% elif act.difficulty == 'Easy' %}
+                            <span class="brand-badge badge-success">Easy</span>
+                        {% elif act.difficulty == 'Medium' %}
+                            <span class="brand-badge badge-warning">Medium</span>
+                        {% else %}
+                            <span class="brand-badge badge-purple">Advanced</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: center;">
+                        <a href="{{ url_for('admin.activity_questions', activity_id=act.id) }}" class="brand-badge badge-primary" style="text-decoration: none; font-weight: 600;">
+                            {{ q_count }} question{{ 's' if q_count != 1 else '' }}
+                        </a>
+                    </td>
+                    <td style="text-align: center; color: var(--color-text-muted); font-size: 0.9rem;">
+                        {{ sess_count }}
+                    </td>
+                    <td style="text-align: center;">
+                        {% if act.is_active %}
+                            <span class="brand-badge badge-success">Active</span>
+                        {% else %}
+                            <span class="brand-badge badge-danger">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right; white-space: nowrap;">
+                        <a href="{{ url_for('admin.activity_questions', activity_id=act.id) }}" class="btn btn-outline btn-sm" style="margin-right: 0.35rem;" title="Manage Questions">Questions</a>
+                        <a href="{{ url_for('admin.activity_edit', activity_id=act.id) }}" class="btn btn-outline btn-sm" style="margin-right: 0.35rem;">Edit</a>
+                        
+                        <!-- Toggle Status (Deactivate / Activate) -->
+                        <form method="POST" action="{{ url_for('admin.activity_toggle_status', activity_id=act.id) }}" style="display: inline-block; margin-right: 0.35rem;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            {% if act.is_active %}
+                                <button type="submit" class="btn btn-outline btn-sm" style="color: #D97706; border-color: #FDE68A;" title="Soft delete: hide from children while preserving session data">
+                                    Deactivate
+                                </button>
+                            {% else %}
+                                <button type="submit" class="btn btn-outline btn-sm" style="color: var(--color-success); border-color: #A7F3D0;">
+                                    Activate
+                                </button>
+                            {% endif %}
+                        </form>
+
+                        <!-- Hard Delete (Allowed only if zero sessions attached) -->
+                        <form method="POST" action="{{ url_for('admin.activity_delete', activity_id=act.id) }}" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to permanently delete \'{{ act.title }}\'?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            {% if sess_count > 0 %}
+                                <button type="submit" class="btn btn-outline btn-sm" style="color: var(--color-text-muted); border-color: var(--color-border);" title="Deletion blocked: {{ sess_count }} session(s) attached. Deactivate instead.">
+                                    Delete
+                                </button>
+                            {% else %}
+                                <button type="submit" class="btn btn-outline btn-sm" style="color: var(--color-danger); border-color: #FECACA;" title="Permanently delete this activity">
+                                    Delete
+                                </button>
+                            {% endif %}
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <div style="text-align: center; padding: 3rem 1.5rem;">
+            <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🎮</div>
+            <h3 style="margin-bottom: 0.5rem;">No activities found</h3>
+            <p style="color: var(--color-text-muted); max-width: 440px; margin: 0 auto 1.5rem;">
+                No educational activities matched your filters. Try clearing your filters or create a new activity.
+            </p>
+            <a href="{{ url_for('admin.activity_create') }}" class="btn btn-primary btn-sm">Add First Activity</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+<div class="notification-widget" id="notificationWidget">
+    <button type="button" class="notification-btn" id="notificationBtn" aria-label="View notifications" aria-expanded="false" title="Notifications">
+        <svg class="notification-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        </svg>
+        <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
+    </button>
+
+    <div class="notification-dropdown" id="notificationDropdown" style="display: none;">
+        <div class="notification-dropdown-header">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="font-weight: 700; font-size: 0.95rem; color: var(--color-text-main);">Notifications</span>
+                <span class="notification-unread-pill" id="notificationUnreadPill" style="display: none;">0 new</span>
+            </div>
+            <button type="button" class="notification-mark-all" id="notificationMarkAllBtn">Mark all read</button>
+        </div>
+        <div class="notification-list" id="notificationList">
+            <div class="notification-empty">Loading updates...</div>
+        </div>
+    </div>
+</div>

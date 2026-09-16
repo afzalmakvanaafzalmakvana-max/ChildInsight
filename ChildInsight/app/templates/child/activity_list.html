@@ -1,0 +1,78 @@
+{% extends "base_child.html" %}
+
+{% block title %}{{ category.name }} — ChildInsight{% endblock %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem;">
+        <div>
+            <a href="{{ url_for('child.categories_hub', child_id=child.id) }}" class="btn child-btn child-btn-yellow" style="font-size: 0.9rem; padding: 0.4rem 1rem; text-decoration: none; display: inline-flex; align-items: center;">
+                {{ t('back_to_categories') }}
+            </a>
+            <h1 style="font-size: 2.25rem; color: var(--color-child-accent); margin-top: 1rem;">
+                {{ category.icon }} {{ t(category.slug, default=category.name) }}
+            </h1>
+        </div>
+        <span class="brand-badge" style="background: #EDE9FE; color: #5B21B6; font-size: 0.85rem;">
+            {{ child.name | replace(' [Demo Data]', '') }}
+            {% if '[Demo Data]' in child.name %}
+                <span class="brand-badge" style="background: #FEF3C7; color: #92400E; font-size: 0.72rem; margin-left: 0.25rem;">Demo Data</span>
+            {% endif %}
+        </span>
+    </div>
+
+    {% if activities %}
+        <div class="grid-2" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
+            {% for act in activities %}
+                <div class="child-card" style="padding: 1.75rem; text-align: left; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <h2 style="font-size: 1.35rem; margin: 0; color: #1F2937;">
+                                {{ act.get_title(child_lang) | replace(' [Demo Data]', '') }}
+                                {% if '[Demo Data]' in act.title %}
+                                    <span class="brand-badge" style="background: #FEF3C7; color: #92400E; font-size: 0.72rem; vertical-align: middle; margin-left: 0.25rem;">Demo Data</span>
+                                {% endif %}
+                            </h2>
+                            <div style="display: flex; gap: 0.4rem; align-items: center;">
+                                <span class="brand-badge" style="background: #EFF6FF; color: #1E40AF; font-size: 0.75rem;">
+                                    {{ t('ages_band', min=act.min_age, max=act.max_age) }}
+                                </span>
+                                <span class="brand-badge badge-{{ act.difficulty | lower }}">
+                                    {{ t(act.difficulty, default=act.difficulty) }}
+                                </span>
+                            </div>
+                        </div>
+
+                        {% if child_lang == 'hi' and not act.has_translation('hi') %}
+                            <div style="margin-bottom: 0.75rem;">
+                                <span class="brand-badge" style="background: #FEF3C7; color: #92400E; font-size: 0.75rem; border: 1px solid #FCD34D;">
+                                    🌐 {{ t('english_fallback_notice') }}
+                                </span>
+                            </div>
+                        {% endif %}
+
+                        <p style="color: #4B5563; font-size: 1rem; margin-bottom: 1.25rem;">
+                            {{ act.get_description(child_lang) }}
+                        </p>
+                    </div>
+
+                    <div style="border-top: 2px solid #EDE9FE; padding-top: 1rem; display: flex; align-items: center; justify-content: space-between;">
+                        <span style="font-size: 0.9rem; color: #6B7280;">{{ t('duration_mins', duration=act.estimated_duration) }}</span>
+                        <a href="{{ url_for('child.player', child_id=child.id, activity_id=act.id) }}" class="btn child-btn child-btn-purple" style="font-size: 1rem; padding: 0.5rem 1.5rem;">
+                            {{ t('play_now') }}
+                        </a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="card" style="text-align: center; padding: 3rem 1.5rem; background: #FAF5FF; border: 2px dashed #C084FC;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🌟</div>
+            <h3 style="color: #4C1D95; font-size: 1.35rem; margin-bottom: 0.5rem;">{{ t('no_activities_age') }}</h3>
+            <p style="color: #6B7280; max-width: 460px; margin: 0 auto 1.5rem;">
+                {{ t('no_activities_desc') }}
+            </p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

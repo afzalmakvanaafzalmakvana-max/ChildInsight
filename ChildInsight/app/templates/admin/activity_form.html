@@ -1,0 +1,114 @@
+{% extends "base_admin.html" %}
+
+{% block title %}{{ title }} — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1>{{ title }}</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">
+            {% if is_edit %}
+                Modify activity title, learning domain, target age band, and availability.
+            {% else %}
+                Create a new interactive learning exercise for student evaluation.
+            {% endif %}
+        </p>
+    </div>
+    <div>
+        <a href="{{ url_for('admin.activities_list') }}" class="btn btn-outline btn-sm">&larr; Back to Activities</a>
+    </div>
+</div>
+
+<div class="card" style="max-width: 680px; margin: 0 auto;">
+    <form method="POST" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+            {{ form.title.label(class="form-label") }}
+            {{ form.title(class="form-control" + (" is-invalid" if form.title.errors else ""), placeholder="e.g. Pattern Safari, Number Grid Detective...") }}
+            {% for error in form.title.errors %}
+                <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div class="grid-2" style="margin-bottom: 1.25rem;">
+            <div class="form-group" style="margin: 0;">
+                {{ form.category_id.label(class="form-label") }}
+                {{ form.category_id(class="form-control" + (" is-invalid" if form.category_id.errors else "")) }}
+                {% for error in form.category_id.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group" style="margin: 0;">
+                {{ form.difficulty.label(class="form-label") }}
+                {{ form.difficulty(class="form-control" + (" is-invalid" if form.difficulty.errors else "")) }}
+                {% for error in form.difficulty.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="grid-3" style="margin-bottom: 1.25rem;">
+            <div class="form-group" style="margin: 0;">
+                {{ form.estimated_duration.label(class="form-label") }}
+                {{ form.estimated_duration(class="form-control" + (" is-invalid" if form.estimated_duration.errors else "")) }}
+                {% for error in form.estimated_duration.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group" style="margin: 0;">
+                {{ form.min_age.label(class="form-label") }}
+                {{ form.min_age(class="form-control" + (" is-invalid" if form.min_age.errors else "")) }}
+                {% for error in form.min_age.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group" style="margin: 0;">
+                {{ form.max_age.label(class="form-label") }}
+                {{ form.max_age(class="form-control" + (" is-invalid" if form.max_age.errors else "")) }}
+                {% for error in form.max_age.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+            {{ form.description.label(class="form-label") }}
+            {{ form.description(class="form-control" + (" is-invalid" if form.description.errors else ""), rows="3", placeholder="Brief description of the challenge or playful premise for the child...") }}
+            {% for error in form.description.errors %}
+                <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.75rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                {{ form.is_active() }}
+                <span style="font-weight: 500;">Active for learners (uncheck to deactivate/soft-delete)</span>
+            </label>
+            <small style="display: block; color: var(--color-text-muted); margin-top: 0.25rem;">
+                When inactive, this activity is completely hidden from child activity hubs, but historical session records remain intact.
+            </small>
+        </div>
+
+        {% if is_edit and activity %}
+            <div style="background: var(--color-bg); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; font-size: 0.85rem; border: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div><strong>Attached Questions:</strong> {{ activity.questions.count() }}</div>
+                    <div><strong>Session History:</strong> {{ activity.sessions.count() }} completed/logged sessions</div>
+                </div>
+                <div>
+                    <a href="{{ url_for('admin.activity_questions', activity_id=activity.id) }}" class="btn btn-outline btn-sm">Manage Questions &rarr;</a>
+                </div>
+            </div>
+        {% endif %}
+
+        <div style="display: flex; gap: 0.75rem; align-items: center;">
+            {{ form.submit(class="btn btn-primary") }}
+            <a href="{{ url_for('admin.activities_list') }}" class="btn btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

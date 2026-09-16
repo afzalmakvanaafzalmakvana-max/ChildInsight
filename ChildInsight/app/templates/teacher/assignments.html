@@ -1,0 +1,171 @@
+{% extends "base_teacher.html" %}
+
+{% block title %}Activity Assignments — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h1>Activity Assignments & Guided Learning</h1>
+        <p style="color: var(--color-text-muted); margin: 0;">Directly assign educational activities to students to guide learning journeys, reinforce concepts, and encourage progress.</p>
+    </div>
+    <a href="{{ url_for('teacher.students_list') }}" class="btn btn-outline btn-sm">View All Students &rarr;</a>
+</div>
+
+{% if not assigned_children %}
+    <!-- Empty State: No Students Assigned -->
+    <div class="card empty-state" style="text-align: center; padding: 3rem 1.5rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">📚</div>
+        <h2>No Students Assigned Yet</h2>
+        <p style="color: var(--color-text-muted); max-width: 480px; margin: 0 auto 1.5rem;">
+            You currently have no learners linked to your classroom. An administrator can assign students to your educator account.
+        </p>
+        <a href="{{ url_for('teacher.dashboard') }}" class="btn btn-primary">Back to Overview</a>
+    </div>
+{% else %}
+    <!-- Quick Assign Card -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div style="margin-bottom: 1rem;">
+            <h2 style="margin: 0; font-size: 1.2rem;">Assign New Activity</h2>
+            <p style="color: var(--color-text-muted); font-size: 0.85rem; margin: 0.25rem 0 0;">
+                Select a student and choose an activity from the learning catalog with optional guidance notes.
+            </p>
+        </div>
+
+        <form id="assignActivityForm" method="POST" action="" onsubmit="return handleAssignSubmit(event)" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div style="flex: 1; min-width: 220px;">
+                <label for="assign-student-select" class="form-label" style="font-size: 0.85rem;">Select Student</label>
+                <select id="assign-student-select" class="form-control" required>
+                    <option value="">-- Choose student --</option>
+                    {% for child in assigned_children %}
+                        <option value="{{ child.id }}">{{ child.name }} (Age {{ child.age or 'N/A' }} &bull; {{ child.grade or 'General' }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div style="flex: 1.5; min-width: 260px;">
+                <label for="assign-activity-select" class="form-label" style="font-size: 0.85rem;">Select Educational Activity</label>
+                <select id="assign-activity-select" name="activity_id" class="form-control" required>
+                    <option value="">-- Choose an activity --</option>
+                    {% for act in activities %}
+                        <option value="{{ act.id }}">
+                            {{ act.title }} ({{ act.category.name if act.category else 'General' }} &bull; {{ act.difficulty }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div style="flex: 2; min-width: 260px;">
+                <label for="assign-note" class="form-label" style="font-size: 0.85rem;">Instructional Note / Guidance (Optional)</label>
+                <input type="text" id="assign-note" name="note" class="form-control" placeholder="e.g. Try this puzzle to practice counting!">
+            </div>
+
+            <div>
+                <button type="submit" class="btn btn-primary" style="height: 42px;">Assign Activity</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Recent Guided Assignments Table -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+            <h2 style="margin: 0; font-size: 1.2rem;">Recent Assignments & Guided Recommendations</h2>
+            <span style="color: var(--color-text-muted); font-size: 0.85rem;">{{ recent_assignments|length }} records</span>
+        </div>
+
+        {% if recent_assignments %}
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--color-border); color: var(--color-text-muted);">
+                            <th style="padding: 0.75rem 0.5rem;">Student</th>
+                            <th style="padding: 0.75rem 0.5rem;">Activity</th>
+                            <th style="padding: 0.75rem 0.5rem;">Domain</th>
+                            <th style="padding: 0.75rem 0.5rem;">Difficulty</th>
+                            <th style="padding: 0.75rem 0.5rem;">Guidance / Note</th>
+                            <th style="padding: 0.75rem 0.5rem;">Assigned On</th>
+                            <th style="padding: 0.75rem 0.5rem;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in recent_assignments %}
+                            <tr style="border-bottom: 1px solid var(--color-border);">
+                                <td style="padding: 0.75rem 0.5rem; font-weight: 600;">
+                                    <a href="{{ url_for('teacher.student_detail', child_id=rec.child_id) }}" style="text-decoration: none; color: var(--color-primary);">
+                                        {{ rec.child.name if rec.child else 'Student #' ~ rec.child_id }}
+                                    </a>
+                                </td>
+                                <td style="padding: 0.75rem 0.5rem; font-weight: 500;">
+                                    {{ rec.activity.title if rec.activity else 'Activity #' ~ rec.activity_id }}
+                                </td>
+                                <td style="padding: 0.75rem 0.5rem;">
+                                    <span class="brand-badge">{{ rec.activity.category.name if rec.activity and rec.activity.category else 'General' }}</span>
+                                </td>
+                                <td style="padding: 0.75rem 0.5rem;">
+                                    <span class="brand-badge" style="background: #F3F4F6; color: #4B5563;">{{ rec.activity.difficulty if rec.activity else 'Medium' }}</span>
+                                </td>
+                                <td style="padding: 0.75rem 0.5rem; color: var(--color-text-muted); max-width: 280px; font-size: 0.85rem;">
+                                    {{ rec.reason or '—' }}
+                                </td>
+                                <td style="padding: 0.75rem 0.5rem; color: var(--color-text-muted); font-size: 0.82rem; white-space: nowrap;">
+                                    {{ rec.created_at.strftime('%b %d, %Y') if rec.created_at else 'Recently' }}
+                                </td>
+                                <td style="padding: 0.75rem 0.5rem; white-space: nowrap;">
+                                    <a href="{{ url_for('teacher.student_detail', child_id=rec.child_id) }}" class="btn btn-outline btn-sm">Profile &rarr;</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p style="color: var(--color-text-muted); margin: 0; padding: 1rem 0;">No activities have been assigned yet. Use the form above to guide student learning.</p>
+        {% endif %}
+    </div>
+
+    <!-- Assigned Students Overview Grid -->
+    <div class="card">
+        <h2 style="margin-top: 0; margin-bottom: 1rem; font-size: 1.2rem;">Assigned Class Learners</h2>
+        <div class="grid-3">
+            {% for child in assigned_children %}
+                <div style="border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1rem; background: var(--color-bg); display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                            <div style="width: 38px; height: 38px; border-radius: 50%; background: #EFF6FF; color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-weight: 700;">
+                                {{ child.name[0] }}
+                            </div>
+                            <div>
+                                <strong style="font-size: 1rem;">{{ child.name }}</strong>
+                                <div style="color: var(--color-text-muted); font-size: 0.8rem;">
+                                    Age: {{ child.age or 'N/A' }} &bull; {{ child.grade or 'General' }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem; display: flex; justify-content: flex-end;">
+                        <a href="{{ url_for('teacher.student_detail', child_id=child.id) }}" class="btn btn-outline btn-sm">Student Workspace &rarr;</a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+function handleAssignSubmit(e) {
+    const studentSelect = document.getElementById('assign-student-select');
+    const childId = studentSelect.value;
+    if (!childId) {
+        e.preventDefault();
+        alert('Please select a student.');
+        return false;
+    }
+    const form = document.getElementById('assignActivityForm');
+    form.action = '/teacher/students/' + childId + '/assign-activity';
+    return true;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Authentication Required — ChildInsight{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="card" style="padding: 3rem 2rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-md);">
+        <div style="font-size: 3rem; margin-bottom: 0.5rem;">🔑</div>
+        <div class="error-code" style="color: var(--color-primary);">401</div>
+        <h1 class="error-title">Sign In Required</h1>
+        <p class="error-message">You need to be signed in to an authorized account to view this section of ChildInsight.</p>
+        <div style="display: flex; gap: 0.75rem; justify-content: center;">
+            <a href="{{ url_for('auth.login') }}" class="btn btn-primary">Sign In</a>
+            <a href="{{ url_for('auth.index') }}" class="btn btn-outline">Return to Homepage</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
