@@ -507,10 +507,11 @@ def consolidate_gap_specs(gap_specs: list, categories: list = None) -> list:
                 merged_age_band = primary_spec.get('age_band')
             else:
                 type_priority = {
-                    ContentSuggestion.TYPE_CONTENT_IMBALANCE: 4,
-                    ContentSuggestion.TYPE_NEW_CATEGORY: 3,
-                    ContentSuggestion.TYPE_AGE_COVERAGE_GAP: 2,
-                    ContentSuggestion.TYPE_PROGRESSION_GAP: 1
+                    ContentSuggestion.TYPE_CONTENT_IMBALANCE: 5,
+                    ContentSuggestion.TYPE_NEW_CATEGORY: 4,
+                    ContentSuggestion.TYPE_AGE_COVERAGE_GAP: 3,
+                    ContentSuggestion.TYPE_PROGRESSION_GAP: 2,
+                    ContentSuggestion.TYPE_TRANSLATION_GAP: 1
                 }
                 primary_spec = max(
                     cluster,
@@ -593,7 +594,12 @@ def cleanup_duplicate_pending_suggestions() -> int:
 
     grouped = {}
     for s in pending:
-        key = f"cat_{s.category_id}" if s.category_id is not None else f"title_{(s.suggested_title or '').strip().lower()}"
+        is_trans = (s.suggestion_type == ContentSuggestion.TYPE_TRANSLATION_GAP)
+        trans_suffix = "_trans" if is_trans else ""
+        if s.category_id is not None:
+            key = f"cat_{s.category_id}{trans_suffix}"
+        else:
+            key = f"title_{(s.suggested_title or '').strip().lower()}{trans_suffix}"
         grouped.setdefault(key, []).append(s)
 
     deleted_count = 0
@@ -694,6 +700,7 @@ def generate_suggestions(persist: bool = True) -> list:
         matching_existing = [
             e for e in cat_pending
             if age_bands_overlap(e.age_band, spec.get('age_band'))
+            and (e.suggestion_type == ContentSuggestion.TYPE_TRANSLATION_GAP) == (spec.get('suggestion_type') == ContentSuggestion.TYPE_TRANSLATION_GAP)
         ]
 
         if matching_existing:

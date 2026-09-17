@@ -83,24 +83,63 @@
 
     <!-- Activity Metadata Card -->
     <div class="card" style="margin-bottom: 2rem; padding: 1.75rem;">
-        <h2 style="font-size: 1.2rem; margin-bottom: 1.25rem; color: var(--color-text-main);">
-            Activity Details (Editable)
-        </h2>
-
-        <div class="form-group" style="margin-bottom: 1.25rem;">
-            <label for="activity-title" class="form-label" style="font-weight: 600;">
-                Activity Title <span style="color: #DC2626;">*</span>
-            </label>
-            <input type="text" id="activity-title" name="title" class="form-control" value="{{ draft.title }}" required style="font-size: 1.1rem; font-weight: 600;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem;">
+            <h2 style="font-size: 1.2rem; margin: 0; color: var(--color-text-main);">
+                Activity Details (Editable)
+            </h2>
+            {% if draft.has_hindi %}
+                <span class="badge badge-purple" style="font-size: 0.85rem; padding: 0.35rem 0.75rem;">🌐 Dual-Language Draft (English & Hindi)</span>
+            {% endif %}
         </div>
 
-        <div class="form-group" style="margin-bottom: 1.25rem;">
-            <label for="activity-desc" class="form-label" style="font-weight: 600;">
-                Scenario Description
-            </label>
-            <textarea id="activity-desc" name="description" class="form-control" rows="2">{{ draft.description }}</textarea>
-            <small style="color: var(--color-text-muted);">Set the playful, adventure-style scene for learners.</small>
-        </div>
+        {% if draft.has_hindi %}
+            <div class="grid-2" style="gap: 1.25rem; margin-bottom: 1.25rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="activity-title" class="form-label" style="font-weight: 600;">
+                        Activity Title (English) <span style="color: #DC2626;">*</span>
+                    </label>
+                    <input type="text" id="activity-title" name="title" class="form-control" value="{{ draft.title }}" required style="font-size: 1.05rem; font-weight: 600;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="activity-hi-title" class="form-label" style="font-weight: 600;">
+                        Activity Title (Hindi / हिंदी) <span style="color: #DC2626;">*</span>
+                    </label>
+                    <input type="text" id="activity-hi-title" name="hi_title" class="form-control" value="{{ draft.translations.hi.title if draft.translations and draft.translations.hi else '' }}" required style="font-size: 1.05rem; font-weight: 600;">
+                </div>
+            </div>
+
+            <div class="grid-2" style="gap: 1.25rem; margin-bottom: 1.25rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="activity-desc" class="form-label" style="font-weight: 600;">
+                        Scenario Description (English)
+                    </label>
+                    <textarea id="activity-desc" name="description" class="form-control" rows="2">{{ draft.description }}</textarea>
+                    <small style="color: var(--color-text-muted);">Set the playful scene in English.</small>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="activity-hi-desc" class="form-label" style="font-weight: 600;">
+                        Scenario Description (Hindi / हिंदी)
+                    </label>
+                    <textarea id="activity-hi-desc" name="hi_description" class="form-control" rows="2">{{ draft.translations.hi.description if draft.translations and draft.translations.hi else '' }}</textarea>
+                    <small style="color: var(--color-text-muted);">हिंदी में गतिविधि का संक्षिप्त विवरण।</small>
+                </div>
+            </div>
+        {% else %}
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+                <label for="activity-title" class="form-label" style="font-weight: 600;">
+                    Activity Title <span style="color: #DC2626;">*</span>
+                </label>
+                <input type="text" id="activity-title" name="title" class="form-control" value="{{ draft.title }}" required style="font-size: 1.1rem; font-weight: 600;">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+                <label for="activity-desc" class="form-label" style="font-weight: 600;">
+                    Scenario Description
+                </label>
+                <textarea id="activity-desc" name="description" class="form-control" rows="2">{{ draft.description }}</textarea>
+                <small style="color: var(--color-text-muted);">Set the playful, adventure-style scene for learners.</small>
+            </div>
+        {% endif %}
 
         <div class="grid-4" style="gap: 1rem;">
             <div class="form-group">
@@ -152,40 +191,86 @@
     <div id="questionsContainer">
         {% for q in draft.questions %}
             {% set q_idx = loop.index0 %}
+            {% if draft.has_hindi and draft.translations and draft.translations.hi and draft.translations.hi.questions and draft.translations.hi.questions[q_idx] %}
+                {% set hi_q = draft.translations.hi.questions[q_idx] %}
+            {% else %}
+                {% set hi_q = None %}
+            {% endif %}
             <div class="card question-card" data-index="{{ q_idx }}" style="margin-bottom: 1.25rem; padding: 1.5rem; border-top: 3px solid var(--color-primary);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <span class="badge badge-primary question-number-badge">Question #{{ loop.index }}</span>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="badge badge-primary question-number-badge">Question #{{ loop.index }}</span>
+                        {% if draft.has_hindi %}
+                            <span class="badge badge-purple" style="font-size: 0.75rem;">EN + HI</span>
+                        {% endif %}
+                    </div>
                     <button type="button" class="btn btn-outline btn-sm btn-remove-q" style="color: #DC2626; border-color: #FECACA;" onclick="removeQuestion(this);">
                         ✕ Remove
                     </button>
                 </div>
 
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label class="form-label" style="font-weight: 600;">Question Prompt <span style="color: #DC2626;">*</span></label>
-                    <input type="text" class="form-control q-text-input" name="q_text_{{ q_idx }}" value="{{ q.question_text }}" required style="font-size: 1rem;">
-                </div>
+                {% if draft.has_hindi %}
+                    <div class="grid-2" style="gap: 1rem; margin-bottom: 1rem;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" style="font-weight: 600;">Question Prompt (English) <span style="color: #DC2626;">*</span></label>
+                            <input type="text" class="form-control q-text-input" name="q_text_{{ q_idx }}" value="{{ q.question_text }}" required style="font-size: 0.95rem;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" style="font-weight: 600;">Question Prompt (Hindi / हिंदी) <span style="color: #DC2626;">*</span></label>
+                            <input type="text" class="form-control q-hi-text-input" name="q_hi_text_{{ q_idx }}" value="{{ hi_q.question_text if hi_q else '' }}" required style="font-size: 0.95rem;">
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label class="form-label" style="font-weight: 600;">Question Prompt <span style="color: #DC2626;">*</span></label>
+                        <input type="text" class="form-control q-text-input" name="q_text_{{ q_idx }}" value="{{ q.question_text }}" required style="font-size: 1rem;">
+                    </div>
+                {% endif %}
 
                 <div class="form-group" style="margin-bottom: 1rem;">
                     <label class="form-label" style="font-weight: 600;">Answer Options & Correct Answer</label>
-                    <small style="display: block; color: var(--color-text-muted); margin-bottom: 0.5rem;">Select the radio button next to the correct answer choice.</small>
+                    <small style="display: block; color: var(--color-text-muted); margin-bottom: 0.5rem;">
+                        Select the radio button next to the correct answer choice{% if draft.has_hindi %} (English on top, Hindi on bottom for each choice){% endif %}.
+                    </small>
 
                     <div class="options-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
                         {% for opt in q.options %}
                             {% set opt_idx = loop.index0 %}
-                            <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--color-bg); padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
-                                <input type="radio" id="q_correct_{{ q_idx }}_{{ opt_idx }}" name="q_correct_choice_{{ q_idx }}" value="{{ opt_idx }}"
-                                       {% if opt == q.correct_answer or (loop.first and q.correct_answer not in q.options) %}checked{% endif %}
-                                       style="width: 18px; height: 18px; cursor: pointer;">
-                                <input type="text" class="form-control q-opt-input" name="q_opt_{{ q_idx }}_{{ opt_idx }}" value="{{ opt }}" placeholder="Option {{ loop.index }}" required style="font-size: 0.9rem;">
+                            {% set hi_opt = hi_q.options[opt_idx] if hi_q and hi_q.options and opt_idx < hi_q.options|length else '' %}
+                            <div style="background: var(--color-bg); padding: 0.6rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 0.4rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <input type="radio" id="q_correct_{{ q_idx }}_{{ opt_idx }}" name="q_correct_choice_{{ q_idx }}" value="{{ opt_idx }}"
+                                           {% if opt == q.correct_answer or (loop.first and q.correct_answer not in q.options) %}checked{% endif %}
+                                           style="width: 18px; height: 18px; cursor: pointer;" title="Correct Answer">
+                                    <input type="text" class="form-control q-opt-input" name="q_opt_{{ q_idx }}_{{ opt_idx }}" value="{{ opt }}" placeholder="English Option {{ loop.index }}" required style="font-size: 0.9rem;">
+                                </div>
+                                {% if draft.has_hindi %}
+                                    <div style="margin-left: 1.6rem;">
+                                        <input type="text" class="form-control q-hi-opt-input" name="q_hi_opt_{{ q_idx }}_{{ opt_idx }}" value="{{ hi_opt }}" placeholder="हिंदी विकल्प {{ loop.index }}" required style="font-size: 0.9rem;">
+                                    </div>
+                                {% endif %}
                             </div>
                         {% endfor %}
                     </div>
                 </div>
 
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Gentle Hint / Scaffolding Clue (Optional)</label>
-                    <input type="text" class="form-control q-hint-input" name="q_hint_{{ q_idx }}" value="{{ q.hint or '' }}" placeholder="Supportive hint to encourage thinking without giving away the answer.">
-                </div>
+                {% if draft.has_hindi %}
+                    <div class="grid-2" style="gap: 1rem; margin-bottom: 0;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Gentle Hint (English, Optional)</label>
+                            <input type="text" class="form-control q-hint-input" name="q_hint_{{ q_idx }}" value="{{ q.hint or '' }}" placeholder="Supportive clue in English...">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Gentle Hint (Hindi / हिंदी, Optional)</label>
+                            <input type="text" class="form-control q-hi-hint-input" name="q_hi_hint_{{ q_idx }}" value="{{ hi_q.hint if hi_q and hi_q.hint else '' }}" placeholder="सहायक संकेत...">
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Gentle Hint / Scaffolding Clue (Optional)</label>
+                        <input type="text" class="form-control q-hint-input" name="q_hint_{{ q_idx }}" value="{{ q.hint or '' }}" placeholder="Supportive hint to encourage thinking without giving away the answer.">
+                    </div>
+                {% endif %}
             </div>
         {% endfor %}
     </div>
@@ -193,7 +278,7 @@
     <!-- Actions Toolbar Sticky Footer -->
     <div class="card" style="margin-top: 2rem; padding: 1.25rem 1.75rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; border-top: 2px solid var(--color-border);">
         <div style="font-size: 0.9rem; color: var(--color-text-muted);">
-            Once approved, the activity and all questions will be active in the catalog.
+            Once approved, the activity and all questions will be active in the catalog{% if draft.has_hindi %} in both English and Hindi{% endif %}.
         </div>
         <div style="display: flex; gap: 0.75rem;">
             <a href="{{ url_for('admin.activities_list') }}" class="btn btn-outline" onclick="return confirm('Discard this unsaved draft?');">
@@ -207,6 +292,7 @@
 </form>
 
 <script>
+const hasHindiDraft = {{ 'true' if draft.has_hindi else 'false' }};
 let questionCounter = {{ draft.questions|length }};
 
 function removeQuestion(btn) {
@@ -230,12 +316,23 @@ function reindexQuestions() {
         const textInput = card.querySelector('.q-text-input');
         if (textInput) textInput.name = `q_text_${idx}`;
 
+        const hiTextInput = card.querySelector('.q-hi-text-input');
+        if (hiTextInput) hiTextInput.name = `q_hi_text_${idx}`;
+
         const hintInput = card.querySelector('.q-hint-input');
         if (hintInput) hintInput.name = `q_hint_${idx}`;
+
+        const hiHintInput = card.querySelector('.q-hi-hint-input');
+        if (hiHintInput) hiHintInput.name = `q_hi_hint_${idx}`;
 
         const optInputs = card.querySelectorAll('.q-opt-input');
         optInputs.forEach((optInput, optIdx) => {
             optInput.name = `q_opt_${idx}_${optIdx}`;
+        });
+
+        const hiOptInputs = card.querySelectorAll('.q-hi-opt-input');
+        hiOptInputs.forEach((hiOptInput, optIdx) => {
+            hiOptInput.name = `q_hi_opt_${idx}_${optIdx}`;
         });
 
         const radios = card.querySelectorAll('input[type="radio"]');
@@ -256,43 +353,90 @@ document.getElementById('btnAddQuestion').addEventListener('click', () => {
     newCard.setAttribute('data-index', newIdx);
     newCard.style.cssText = 'margin-bottom: 1.25rem; padding: 1.5rem; border-top: 3px solid var(--color-primary);';
 
+    let promptHtml = '';
+    let hintHtml = '';
+    let optsHtml = '';
+
+    if (hasHindiDraft) {
+        promptHtml = `
+            <div class="grid-2" style="gap: 1rem; margin-bottom: 1rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" style="font-weight: 600;">Question Prompt (English) <span style="color: #DC2626;">*</span></label>
+                    <input type="text" class="form-control q-text-input" name="q_text_${newIdx}" placeholder="Enter question prompt..." required style="font-size: 0.95rem;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" style="font-weight: 600;">Question Prompt (Hindi / हिंदी) <span style="color: #DC2626;">*</span></label>
+                    <input type="text" class="form-control q-hi-text-input" name="q_hi_text_${newIdx}" placeholder="हिंदी प्रश्न दर्ज करें..." required style="font-size: 0.95rem;">
+                </div>
+            </div>
+        `;
+        hintHtml = `
+            <div class="grid-2" style="gap: 1rem; margin-bottom: 0;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Gentle Hint (English, Optional)</label>
+                    <input type="text" class="form-control q-hint-input" name="q_hint_${newIdx}" placeholder="Supportive hint...">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Gentle Hint (Hindi / हिंदी, Optional)</label>
+                    <input type="text" class="form-control q-hi-hint-input" name="q_hi_hint_${newIdx}" placeholder="सहायक संकेत...">
+                </div>
+            </div>
+        `;
+        for (let i = 0; i < 4; i++) {
+            optsHtml += `
+                <div style="background: var(--color-bg); padding: 0.6rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 0.4rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="radio" id="q_correct_${newIdx}_${i}" name="q_correct_choice_${newIdx}" value="${i}" ${i === 0 ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                        <input type="text" class="form-control q-opt-input" name="q_opt_${newIdx}_${i}" placeholder="Option ${i + 1}" required style="font-size: 0.9rem;">
+                    </div>
+                    <div style="margin-left: 1.6rem;">
+                        <input type="text" class="form-control q-hi-opt-input" name="q_hi_opt_${newIdx}_${i}" placeholder="विकल्प ${i + 1}" required style="font-size: 0.9rem;">
+                    </div>
+                </div>
+            `;
+        }
+    } else {
+        promptHtml = `
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label class="form-label" style="font-weight: 600;">Question Prompt <span style="color: #DC2626;">*</span></label>
+                <input type="text" class="form-control q-text-input" name="q_text_${newIdx}" placeholder="Enter question prompt..." required style="font-size: 1rem;">
+            </div>
+        `;
+        hintHtml = `
+            <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Gentle Hint / Scaffolding Clue (Optional)</label>
+                <input type="text" class="form-control q-hint-input" name="q_hint_${newIdx}" placeholder="Supportive hint...">
+            </div>
+        `;
+        for (let i = 0; i < 4; i++) {
+            optsHtml += `
+                <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--color-bg); padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
+                    <input type="radio" id="q_correct_${newIdx}_${i}" name="q_correct_choice_${newIdx}" value="${i}" ${i === 0 ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                    <input type="text" class="form-control q-opt-input" name="q_opt_${newIdx}_${i}" placeholder="Option ${i + 1}" required style="font-size: 0.9rem;">
+                </div>
+            `;
+        }
+    }
+
     newCard.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <span class="badge badge-primary question-number-badge">Question #${newIdx + 1}</span>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span class="badge badge-primary question-number-badge">Question #${newIdx + 1}</span>
+                ${hasHindiDraft ? '<span class="badge badge-purple" style="font-size: 0.75rem;">EN + HI</span>' : ''}
+            </div>
             <button type="button" class="btn btn-outline btn-sm btn-remove-q" style="color: #DC2626; border-color: #FECACA;" onclick="removeQuestion(this);">
                 ✕ Remove
             </button>
         </div>
-        <div class="form-group" style="margin-bottom: 1rem;">
-            <label class="form-label" style="font-weight: 600;">Question Prompt <span style="color: #DC2626;">*</span></label>
-            <input type="text" class="form-control q-text-input" name="q_text_${newIdx}" placeholder="Enter question prompt..." required style="font-size: 1rem;">
-        </div>
+        ${promptHtml}
         <div class="form-group" style="margin-bottom: 1rem;">
             <label class="form-label" style="font-weight: 600;">Answer Options & Correct Answer</label>
             <small style="display: block; color: var(--color-text-muted); margin-bottom: 0.5rem;">Select the radio button next to the correct answer choice.</small>
             <div class="options-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--color-bg); padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
-                    <input type="radio" id="q_correct_${newIdx}_0" name="q_correct_choice_${newIdx}" value="0" checked style="width: 18px; height: 18px; cursor: pointer;">
-                    <input type="text" class="form-control q-opt-input" name="q_opt_${newIdx}_0" placeholder="Option 1" required style="font-size: 0.9rem;">
-                </div>
-                <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--color-bg); padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
-                    <input type="radio" id="q_correct_${newIdx}_1" name="q_correct_choice_${newIdx}" value="1" style="width: 18px; height: 18px; cursor: pointer;">
-                    <input type="text" class="form-control q-opt-input" name="q_opt_${newIdx}_1" placeholder="Option 2" required style="font-size: 0.9rem;">
-                </div>
-                <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--color-bg); padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
-                    <input type="radio" id="q_correct_${newIdx}_2" name="q_correct_choice_${newIdx}" value="2" style="width: 18px; height: 18px; cursor: pointer;">
-                    <input type="text" class="form-control q-opt-input" name="q_opt_${newIdx}_2" placeholder="Option 3" required style="font-size: 0.9rem;">
-                </div>
-                <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--color-bg); padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius-sm);">
-                    <input type="radio" id="q_correct_${newIdx}_3" name="q_correct_choice_${newIdx}" value="3" style="width: 18px; height: 18px; cursor: pointer;">
-                    <input type="text" class="form-control q-opt-input" name="q_opt_${newIdx}_3" placeholder="Option 4" required style="font-size: 0.9rem;">
-                </div>
+                ${optsHtml}
             </div>
         </div>
-        <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">Gentle Hint / Scaffolding Clue (Optional)</label>
-            <input type="text" class="form-control q-hint-input" name="q_hint_${newIdx}" placeholder="Supportive hint...">
-        </div>
+        ${hintHtml}
     `;
     container.appendChild(newCard);
 });
@@ -311,13 +455,34 @@ document.getElementById('draftReviewForm').addEventListener('submit', (e) => {
         const correct = opts[selectedIdx] || opts[0] || '';
         const hint = card.querySelector('.q-hint-input')?.value.trim() || null;
 
+        let translations = null;
+        if (hasHindiDraft) {
+            const hiText = card.querySelector('.q-hi-text-input')?.value.trim() || '';
+            const hiOptInputs = card.querySelectorAll('.q-hi-opt-input');
+            const hiOpts = Array.from(hiOptInputs).map(inp => inp.value.trim()).filter(Boolean);
+            const hiCorrect = hiOpts[selectedIdx] || hiOpts[0] || '';
+            const hiHint = card.querySelector('.q-hi-hint-input')?.value.trim() || null;
+
+            if (hiText && hiOpts.length > 0) {
+                translations = {
+                    hi: {
+                        question_text: hiText,
+                        options: hiOpts,
+                        correct_answer: hiCorrect,
+                        hint: hiHint
+                    }
+                };
+            }
+        }
+
         if (text && opts.length >= 2) {
             questionsPayload.push({
                 order_num: idx + 1,
                 question_text: text,
                 options: opts,
                 correct_answer: correct,
-                hint: hint
+                hint: hint,
+                translations: translations
             });
         }
     });
@@ -330,5 +495,6 @@ document.getElementById('draftReviewForm').addEventListener('submit', (e) => {
 
     document.getElementById('questionsJsonInput').value = JSON.stringify(questionsPayload);
 });
+
 </script>
 {% endblock %}

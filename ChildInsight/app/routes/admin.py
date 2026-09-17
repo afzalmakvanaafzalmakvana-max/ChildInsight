@@ -770,6 +770,17 @@ def activity_ai_draft_publish():
         flash("At least one question is required to publish an activity.", "danger")
         return redirect(url_for('admin.activities_list'))
 
+    hi_title = request.form.get('hi_title', '').strip()
+    hi_description = request.form.get('hi_description', '').strip()
+    act_translations_json = None
+    if hi_title:
+        act_translations_json = json.dumps({
+            'hi': {
+                'title': hi_title,
+                'description': hi_description
+            }
+        }, ensure_ascii=False)
+
     activity = Activity(
         category_id=category.id,
         title=title,
@@ -778,6 +789,7 @@ def activity_ai_draft_publish():
         estimated_duration=duration,
         min_age=min_age,
         max_age=max_age,
+        translations_json=act_translations_json,
         is_active=True,
         is_demo=False
     )
@@ -790,6 +802,10 @@ def activity_ai_draft_publish():
         if correct not in opts and opts:
             correct = opts[0]
 
+        q_translations_json = None
+        if q.get('translations'):
+            q_translations_json = json.dumps(q['translations'], ensure_ascii=False)
+
         question = ActivityQuestion(
             activity_id=activity.id,
             question_text=q.get('question_text', '').strip(),
@@ -797,6 +813,7 @@ def activity_ai_draft_publish():
             options_json=json.dumps(opts),
             correct_answer=correct,
             hint=q.get('hint'),
+            translations_json=q_translations_json,
             order_num=i
         )
         db.session.add(question)
