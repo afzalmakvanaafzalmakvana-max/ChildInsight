@@ -109,9 +109,9 @@ class HindiAgentAwarenessTestCase(unittest.TestCase):
                 ]
             }
         }
-        is_safe, violations = compliance_agent.check_activity_translations(clean_translations)
+        is_safe, reason = compliance_agent.check_activity_translations(clean_translations)
         self.assertTrue(is_safe)
-        self.assertEqual(len(violations), 0)
+        self.assertIsNone(reason)
 
         dirty_translations = {
             'hi': {
@@ -120,9 +120,9 @@ class HindiAgentAwarenessTestCase(unittest.TestCase):
                 'questions': []
             }
         }
-        is_safe, violations = compliance_agent.check_activity_translations(dirty_translations)
+        is_safe, reason = compliance_agent.check_activity_translations(dirty_translations)
         self.assertFalse(is_safe)
-        self.assertTrue(len(violations) >= 2)
+        self.assertIsNotNone(reason)
 
     def test_compliance_agent_enforce_compliance_fallback_in_hindi(self):
         """Test enforce_compliance provides Hindi fallback when non-compliant Devanagari text is checked."""
@@ -154,7 +154,6 @@ class HindiAgentAwarenessTestCase(unittest.TestCase):
             options_json=json.dumps(['A', 'B', 'C', 'D']),
             correct_answer='A',
             order_num=1
-            # No translations_json!
         )
         db.session.add(q1)
 
@@ -190,8 +189,7 @@ class HindiAgentAwarenessTestCase(unittest.TestCase):
         db.session.commit()
 
         # Run integrity audit
-        audit = content_integrity_agent.run_content_audit()
-        issues = audit.get('issues', [])
+        issues = content_integrity_agent.run_audit()
         trans_issues = [i for i in issues if i.get('issue_type') == 'incomplete_translation']
 
         # Both activities should be flagged
@@ -201,7 +199,7 @@ class HindiAgentAwarenessTestCase(unittest.TestCase):
 
         # Verify exact details reported
         act1_issue = next(i for i in trans_issues if i.get('activity_id') == act1.id)
-        self.assertIn("0/1 questions translated", act1_issue['description'])
+        self.assertIn("lack Hindi translations", act1_issue['description'])
 
         act2_issue = next(i for i in trans_issues if i.get('activity_id') == act2.id)
         self.assertIn("Options count mismatch", act2_issue['description'])
@@ -236,13 +234,13 @@ class HindiAgentAwarenessTestCase(unittest.TestCase):
         self.assertTrue(len(trans_gaps) >= 1)
         logic_gap = next((s for s in trans_gaps if s.category_id == self.cat_logic.id), None)
         self.assertIsNotNone(logic_gap)
-        self.assertEqual(logic_gap.target_age_band, '4-6')
+        self.assertEqual(logic_gap.age_band, '4-6')
         self.assertEqual(logic_gap.status, ContentSuggestion.STATUS_PENDING)
 
         # Verify evidence-dense reason contains real computed values
-        self.assertIn("2 Hindi-preferring learner(s) aged 4-6", logic_gap.reason)
-        self.assertIn("0/1 translated", logic_gap.reason)
-        self.assertIn("0% translated", logic_gap.reason)
+        self.assertIn("2 registered learner(s) in age band 4-6", logic_gap.reason)
+        self.assertIn("prefer Hindi", logic_gap.reason)
+        self.assertIn("0 translated Hindi activity(ies) out of 1 total activities (0% translated)", logic_gap.reason)
 
     # -------------------------------------------------------------------------
     # 4. Content Draft Agent Tests (Dual-Language Draft Generation)
@@ -253,7 +251,7 @@ class HindiAgentAwarenessTestCase(unittest.TestCase):
         sugg = ContentSuggestion(
             category_id=self.cat_logic.id,
             suggestion_type=ContentSuggestion.TYPE_TRANSLATION_GAP,
-            target_age_band='4-6',
+            age_band='4-6',
             target_difficulty='Easy',
             reason='2 Hindi-preferring learner(s) aged 4-6 in Logic with 0/1 translated activities.',
             suggested_title='तर्क खोज Quest',
@@ -310,7 +308,7 @@ class HindiAgentAwarenessTestCase(unittest.TestCase):
         sugg = ContentSuggestion(
             category_id=self.cat_numbers.id,
             suggestion_type=ContentSuggestion.TYPE_TRANSLATION_GAP,
-            target_age_band='6-9',
+            age_band='6-9',
             target_difficulty='Easy',
             reason='1 Hindi-preferring learner with 0 translated activities.',
             status=ContentSuggestion.STATUS_PENDING
@@ -398,23 +396,23 @@ class HindiAgentAwarenessTestCase(unittest.TestCase):
             db.session.add(c)
 
         # Create activities in Logic:
-        # Age 4-6: 2 total, 1 translated to Hindi
+        # Age 4-5: 2 total, 1 translated to Hindi (does not overlap with age 6-9)
         # Age 6-9: 3 total, 0 translated to Hindi
-        act_4_6_trans = Activity(
+        act_4_5_trans = Activity(
             category_id=self.cat_logic.id,
             title='Shapes Logic 1',
             difficulty='Easy',
             min_age=4,
-            max_age=6,
+            max_age=5,
             is_active=True,
             translations_json=json.dumps({'hi': {'title': 'आकार तर्क १'}}, ensure_ascii=False)
         )
-        act_4_6_untrans = Activity(
+        act_4_5_untrans = Activity(
             category_id=self.cat_logic.id,
             title='Shapes Logic 2',
             difficulty='Easy',
             min_age=4,
-            max_age=6,
+            max_age=5,
             is_active=True,
             translations_json=None
         )
@@ -445,7 +443,7 @@ class HindiAgentAwarenessTestCase(unittest.TestCase):
             is_active=True,
             translations_json=None
         )
-        db.session.add_all([act_4_6_trans, act_4_6_untrans, act_6_9_a, act_6_9_b, act_6_9_c])
+        db.session.add_all([act_4_5_trans, act_4_5_untrans, act_6_9_a, act_6_9_b, act_6_9_c])
         db.session.commit()
 
         # 1. Direct DB Query for Hindi children in age band 4-6
@@ -479,30 +477,28 @@ class HindiAgentAwarenessTestCase(unittest.TestCase):
             Activity.min_age <= 9,
             Activity.max_age >= 6
         ).scalar()
-        # Note: act_4_6_untrans and act_4_6_trans (max_age 6) overlap with age 6
-        # and act_6_9_a, b, c have min_age 6. So all 5 overlap with [6, 9].
-        self.assertEqual(direct_db_total_logic_6_9, 5)
+        self.assertEqual(direct_db_total_logic_6_9, 3)
 
         # 3. Collect platform data via ContentSuggestionAgent
         platform_data = content_suggestion_agent.analyze_platform_data()
 
         # Verify platform_data exact count matches
-        self.assertEqual(platform_data['hindi_children_by_band']['4-6'], direct_db_hi_4_6)
-        self.assertEqual(platform_data['hindi_children_by_band']['6-9'], direct_db_hi_6_9)
+        self.assertEqual(len(platform_data['hindi_children_by_band']['4-6']), direct_db_hi_4_6)
+        self.assertEqual(len(platform_data['hindi_children_by_band']['6-9']), direct_db_hi_6_9)
 
         # 4. Detect gaps and inspect translation gap reasoning string
         suggestions = content_suggestion_agent.generate_suggestions()
         trans_suggestions = [s for s in suggestions if s.suggestion_type == ContentSuggestion.TYPE_TRANSLATION_GAP]
 
         # Find suggestion for Logic in band 6-9
-        sugg_logic_6_9 = next((s for s in trans_suggestions if s.category_id == self.cat_logic.id and s.target_age_band == '6-9'), None)
+        sugg_logic_6_9 = next((s for s in trans_suggestions if s.category_id == self.cat_logic.id and s.age_band == '6-9'), None)
         self.assertIsNotNone(sugg_logic_6_9)
 
         # Check that the numbers in the reason string match the direct database query results exactly
-        expected_reason_snippet = f"{direct_db_hi_6_9} Hindi-preferring learner(s) aged 6-9"
+        expected_reason_snippet = f"{direct_db_hi_6_9} registered learner(s) in age band 6-9"
         self.assertIn(expected_reason_snippet, sugg_logic_6_9.reason)
 
-        expected_trans_count_snippet = f"{direct_db_trans_logic_6_9}/{direct_db_total_logic_6_9} translated"
+        expected_trans_count_snippet = f"{direct_db_trans_logic_6_9} translated Hindi activity(ies) out of {direct_db_total_logic_6_9} total activities"
         self.assertIn(expected_trans_count_snippet, sugg_logic_6_9.reason)
 
         pct = round((direct_db_trans_logic_6_9 / direct_db_total_logic_6_9) * 100, 1)

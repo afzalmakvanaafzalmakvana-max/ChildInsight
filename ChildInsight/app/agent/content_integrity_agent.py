@@ -139,6 +139,7 @@ def run_audit() -> list:
                     'affected_record': f"Activity: {act.title} (ID: {act.id})",
                     'record_type': 'activity',
                     'record_id': act.id,
+                    'activity_id': act.id,
                     'description': (
                         f"Activity #{act.id} ('{act.title}') has Hindi title, but "
                         f"{len(q_missing_hi)} of {total_q} questions lack Hindi translations."
@@ -154,6 +155,7 @@ def run_audit() -> list:
                     'affected_record': f"Activity: {act.title} (ID: {act.id})",
                     'record_type': 'activity',
                     'record_id': act.id,
+                    'activity_id': act.id,
                     'description': (
                         f"Activity #{act.id} ('{act.title}') has {len(q_with_hi)} translated Hindi questions, "
                         f"but the activity title and description lack Hindi translations."
@@ -175,6 +177,7 @@ def run_audit() -> list:
                         'affected_record': f"Activity: {act.title} (ID: {act.id})",
                         'record_type': 'activity',
                         'record_id': act.id,
+                        'activity_id': act.id,
                         'description': (
                             f"Activity #{act.id} ('{act.title}') question #{q.order_num} has {len(hi_opts)} "
                             f"Hindi options, but {len(en_opts)} English options (count mismatch)."
@@ -191,6 +194,7 @@ def run_audit() -> list:
                         'affected_record': f"Activity: {act.title} (ID: {act.id})",
                         'record_type': 'activity',
                         'record_id': act.id,
+                        'activity_id': act.id,
                         'description': (
                             f"Activity #{act.id} ('{act.title}') question #{q.order_num} Hindi correct answer "
                             f"'{hi_correct}' is not included in its Hindi options list."
