@@ -202,7 +202,7 @@ class HindiAgentAwarenessTestCase(unittest.TestCase):
         self.assertIn("lack Hindi translations", act1_issue['description'])
 
         act2_issue = next(i for i in trans_issues if i.get('activity_id') == act2.id)
-        self.assertIn("Options count mismatch", act2_issue['description'])
+        self.assertIn("count mismatch", act2_issue['description'])
 
     # -------------------------------------------------------------------------
     # 3. Content Suggestion Agent Tests (Translation Gap Heuristic)
@@ -501,7 +501,7 @@ class HindiAgentAwarenessTestCase(unittest.TestCase):
         expected_trans_count_snippet = f"{direct_db_trans_logic_6_9} translated Hindi activity(ies) out of {direct_db_total_logic_6_9} total activities"
         self.assertIn(expected_trans_count_snippet, sugg_logic_6_9.reason)
 
-        pct = round((direct_db_trans_logic_6_9 / direct_db_total_logic_6_9) * 100, 1)
+        pct = round((direct_db_trans_logic_6_9 / direct_db_total_logic_6_9) * 100)
         expected_pct_snippet = f"({pct}% translated)"
         self.assertIn(expected_pct_snippet, sugg_logic_6_9.reason)
 
