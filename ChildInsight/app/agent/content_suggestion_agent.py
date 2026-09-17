@@ -19,6 +19,7 @@ from app.models.child import Child
 from app.models.activity import Category, Activity
 from app.models.session import ActivitySession
 from app.models.content_suggestion import ContentSuggestion
+from app.translations import normalize_language
 from app.services import analytics_service
 
 logger = logging.getLogger('childinsight.content_suggestion_agent')
@@ -61,24 +62,33 @@ def get_age_band_for_age(age: int) -> tuple | None:
 
 def analyze_platform_data() -> dict:
     """
-    Collects aggregate learner demographics and content distribution metrics.
+    Collects aggregate learner demographics and content distribution metrics,
+    including language preferences and translation coverage.
     Returns structured analysis payload used by suggestion heuristics.
     """
-    # 1. Demographics: Count learners in each age band
+    # 1. Demographics: Count learners in each age band (overall and Hindi-preferring)
     all_children = Child.query.all()
     age_counts = {'4-6': 0, '6-9': 0, '9-12': 0, '12-14': 0, 'other': 0}
     children_by_band = {'4-6': [], '6-9': [], '9-12': [], '12-14': []}
+    hindi_age_counts = {'4-6': 0, '6-9': 0, '9-12': 0, '12-14': 0, 'other': 0}
+    hindi_children_by_band = {'4-6': [], '6-9': [], '9-12': [], '12-14': []}
 
     for child in all_children:
+        is_hindi = normalize_language(child.preferred_language) == 'hi'
         band_info = get_age_band_for_age(child.age)
         if band_info:
             band_label = band_info[2]
             age_counts[band_label] += 1
             children_by_band[band_label].append(child)
+            if is_hindi:
+                hindi_age_counts[band_label] += 1
+                hindi_children_by_band[band_label].append(child)
         else:
             age_counts['other'] += 1
+            if is_hindi:
+                hindi_age_counts['other'] += 1
 
-    # 2. Activity catalog distribution per category and age band
+    # 2. Activity catalog distribution per category and age band (including Hindi translations)
     categories = Category.query.all()
     cat_metrics = {}
     total_activities = Activity.query.filter_by(is_active=True).count()
@@ -89,27 +99,34 @@ def analyze_platform_data() -> dict:
         by_age = {'4-6': 0, '6-9': 0, '9-12': 0, '12-14': 0}
         by_diff = {'Beginner': 0, 'Easy': 0, 'Medium': 0, 'Advanced': 0}
         by_band_and_diff = {}
+        by_age_translated = {'4-6': 0, '6-9': 0, '9-12': 0, '12-14': 0}
 
         for act in active_acts:
             by_diff[act.difficulty] = by_diff.get(act.difficulty, 0) + 1
+            has_hi = act.has_translation('hi')
             for min_a, max_a, label, _ in AGE_BANDS:
                 if act.min_age <= max_a and act.max_age >= min_a:
                     by_age[label] += 1
                     key = (label, act.difficulty)
                     by_band_and_diff[key] = by_band_and_diff.get(key, 0) + 1
+                    if has_hi:
+                        by_age_translated[label] += 1
 
         cat_metrics[cat.id] = {
             'category': cat,
             'total_count': len(active_acts),
             'by_age': by_age,
             'by_diff': by_diff,
-            'by_band_and_diff': by_band_and_diff
+            'by_band_and_diff': by_band_and_diff,
+            'by_age_translated': by_age_translated
         }
 
     return {
         'total_learners': len(all_children),
         'age_counts': age_counts,
         'children_by_band': children_by_band,
+        'hindi_age_counts': hindi_age_counts,
+        'hindi_children_by_band': hindi_children_by_band,
         'categories': categories,
         'cat_metrics': cat_metrics,
         'avg_activities_per_cat': avg_activities_per_cat
@@ -305,6 +322,54 @@ def detect_gaps(analysis: dict) -> list:
                 'format_reason': make_new_cat_reason,
                 'reason': make_new_cat_reason(1)
             })
+
+    # -------------------------------------------------------------------------
+    # Heuristic 5: Translation Gaps
+    # Detects when Hindi-preferring learners are registered in an age band, but
+    # a category has little or no translated content available (< 2 translated activities).
+    # Uses exact computed database metrics: real child counts, real translated activity
+    # counts, real total activities, and exact calculated translation percentages.
+    # -------------------------------------------------------------------------
+    hindi_age_counts = analysis.get('hindi_age_counts', {})
+    for cat_id, c_data in cat_metrics.items():
+        category = c_data['category']
+        for min_a, max_a, band_label, desc in AGE_BANDS:
+            hindi_count = hindi_age_counts.get(band_label, 0)
+            if hindi_count == 0:
+                continue
+
+            act_count = c_data['by_age'].get(band_label, 0)
+            translated_count = c_data.get('by_age_translated', {}).get(band_label, 0)
+
+            # Translation gap condition:
+            # Active Hindi learners in this band, but < 2 translated activities in this category
+            if translated_count < 2:
+                default_diff = 'Beginner' if band_label == '4-6' else ('Easy' if band_label == '6-9' else ('Medium' if band_label == '9-12' else 'Advanced'))
+                trend = analytics_service.compute_category_age_band_engagement_trend(cat_id, band_label)
+                trans_pct = (translated_count / act_count * 100.0) if act_count > 0 else 0.0
+
+                def make_trans_reason(runs, aff=hindi_count, t_cnt=translated_count, a_cnt=act_count, pct=trans_pct, tr=trend, c_name=category.name, b_lbl=band_label, b_desc=desc):
+                    trend_clause = f" (cohort engagement trend: {tr})" if tr != 'steady' else ""
+                    return (
+                        f"{aff} registered learner(s) in age band {b_lbl} ({b_desc}) prefer Hindi, but category '{c_name}' "
+                        f"currently has only {t_cnt} translated Hindi activity(ies) out of {a_cnt} total activities ({pct:.0f}% translated){trend_clause} — "
+                        f"this translation gap has persisted for {runs} scheduler run(s). "
+                        f"Translating or authoring Hindi content for age band {b_lbl} will ensure native-language cognitive access."
+                    )
+
+                priority = calculate_priority_score(hindi_count, 1, trend)
+                suggestions.append({
+                    'suggestion_type': ContentSuggestion.TYPE_TRANSLATION_GAP,
+                    'category_id': category.id,
+                    'age_band': band_label,
+                    'target_difficulty': default_diff,
+                    'suggested_title': f"{category.name} in Hindi for Ages {band_label}",
+                    'affected_children_count': hindi_count,
+                    'trend': trend,
+                    'priority_score': priority,
+                    'format_reason': make_trans_reason,
+                    'reason': make_trans_reason(1)
+                })
 
     return suggestions
 

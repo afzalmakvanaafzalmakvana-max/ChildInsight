@@ -19,6 +19,7 @@ class ContentSuggestion(db.Model):
     TYPE_AGE_COVERAGE_GAP = 'age_coverage_gap'
     TYPE_CONTENT_IMBALANCE = 'content_imbalance'
     TYPE_NEW_CATEGORY = 'new_category'
+    TYPE_TRANSLATION_GAP = 'translation_gap'
 
     id = db.Column(db.Integer, primary_key=True)
     suggestion_type = db.Column(db.String(50), nullable=False, index=True)

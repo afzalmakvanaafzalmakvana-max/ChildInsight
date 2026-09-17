@@ -107,6 +107,97 @@ def run_audit() -> list:
                 'suggested_fix': "Re-assign this question to an existing activity or delete the orphan record."
             })
 
+    # 4. Translation Completeness & Integrity (Hindi i18n)
+    # Detects activities with partial or broken Hindi translation data:
+    # - Title translated but some or all questions missing Hindi translations
+    # - Questions translated but activity title missing
+    # - Option count mismatch between English and Hindi
+    # - Correct answer in Hindi missing from Hindi options
+    for act in activities:
+        act_trans = act.translations or {}
+        has_hi_act = 'hi' in act_trans and bool(act_trans['hi'].get('title'))
+        act_questions = act.questions.all() if hasattr(act.questions, 'all') else act.questions
+        total_q = len(act_questions)
+
+        # Inspect question-level Hindi translations
+        q_with_hi = []
+        q_missing_hi = []
+        for q in act_questions:
+            q_trans = q.translations or {}
+            if 'hi' in q_trans and bool(q_trans['hi'].get('question_text')):
+                q_with_hi.append(q)
+            else:
+                q_missing_hi.append(q)
+
+        # Check if activity has any Hindi data
+        if has_hi_act or q_with_hi:
+            # Case A: Activity has Hindi title, but questions lack Hindi translations
+            if has_hi_act and q_missing_hi and total_q > 0:
+                issues.append({
+                    'issue_type': 'incomplete_translation',
+                    'severity': 'medium',
+                    'affected_record': f"Activity: {act.title} (ID: {act.id})",
+                    'record_type': 'activity',
+                    'record_id': act.id,
+                    'description': (
+                        f"Activity #{act.id} ('{act.title}') has Hindi title, but "
+                        f"{len(q_missing_hi)} of {total_q} questions lack Hindi translations."
+                    ),
+                    'suggested_fix': f"Provide complete Hindi translations for all {total_q} questions or remove partial translation."
+                })
+
+            # Case B: Questions have Hindi translations, but activity title is missing in Hindi
+            if not has_hi_act and q_with_hi:
+                issues.append({
+                    'issue_type': 'incomplete_translation',
+                    'severity': 'medium',
+                    'affected_record': f"Activity: {act.title} (ID: {act.id})",
+                    'record_type': 'activity',
+                    'record_id': act.id,
+                    'description': (
+                        f"Activity #{act.id} ('{act.title}') has {len(q_with_hi)} translated Hindi questions, "
+                        f"but the activity title and description lack Hindi translations."
+                    ),
+                    'suggested_fix': "Add Hindi translations for the activity title and description."
+                })
+
+            # Case C: Question option count mismatch or missing correct answer in Hindi
+            for q in q_with_hi:
+                q_trans = q.translations.get('hi', {})
+                hi_opts = q_trans.get('options') or []
+                en_opts = q.options or []
+
+                # Options count mismatch
+                if en_opts and len(hi_opts) != len(en_opts):
+                    issues.append({
+                        'issue_type': 'incomplete_translation',
+                        'severity': 'medium',
+                        'affected_record': f"Activity: {act.title} (ID: {act.id})",
+                        'record_type': 'activity',
+                        'record_id': act.id,
+                        'description': (
+                            f"Activity #{act.id} ('{act.title}') question #{q.order_num} has {len(hi_opts)} "
+                            f"Hindi options, but {len(en_opts)} English options (count mismatch)."
+                        ),
+                        'suggested_fix': f"Provide exactly {len(en_opts)} Hindi options matching the English choices."
+                    })
+
+                # Correct answer not in options
+                hi_correct = q_trans.get('correct_answer')
+                if hi_opts and hi_correct and hi_correct not in hi_opts:
+                    issues.append({
+                        'issue_type': 'incomplete_translation',
+                        'severity': 'medium',
+                        'affected_record': f"Activity: {act.title} (ID: {act.id})",
+                        'record_type': 'activity',
+                        'record_id': act.id,
+                        'description': (
+                            f"Activity #{act.id} ('{act.title}') question #{q.order_num} Hindi correct answer "
+                            f"'{hi_correct}' is not included in its Hindi options list."
+                        ),
+                        'suggested_fix': f"Update Hindi options to include '{hi_correct}' as a selectable choice."
+                    })
+
     return issues
 
 
