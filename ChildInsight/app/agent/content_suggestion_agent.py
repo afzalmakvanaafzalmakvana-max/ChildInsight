@@ -449,15 +449,17 @@ def consolidate_gap_specs(gap_specs: list, categories: list = None) -> list:
             if matched:
                 spec['category_id'] = matched.id
 
-    # Group specs by category key
+    # Group specs by category key and gap modality (translation vs standard)
     grouped_by_cat = {}
     for spec in gap_specs:
         cid = spec.get('category_id')
+        is_trans = (spec.get('suggestion_type') == ContentSuggestion.TYPE_TRANSLATION_GAP)
+        trans_suffix = "_trans" if is_trans else ""
         if cid is not None:
-            key = f"cat_{cid}"
+            key = f"cat_{cid}{trans_suffix}"
         else:
             title = (spec.get('suggested_title') or '').strip().lower()
-            key = f"new_{title}"
+            key = f"new_{title}{trans_suffix}"
         grouped_by_cat.setdefault(key, []).append(spec)
 
     consolidated_specs = []
