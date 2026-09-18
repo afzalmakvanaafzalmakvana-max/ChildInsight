@@ -42,6 +42,40 @@
 [data-theme="dark"] .severity-high { background: rgba(239, 68, 68, 0.2) !important; color: #FECACA !important; border-color: rgba(239, 68, 68, 0.4) !important; }
 [data-theme="dark"] .severity-medium { background: rgba(245, 158, 11, 0.2) !important; color: #FDE68A !important; border-color: rgba(245, 158, 11, 0.4) !important; }
 [data-theme="dark"] .severity-low { background: rgba(99, 102, 241, 0.2) !important; color: #C7D2FE !important; border-color: rgba(99, 102, 241, 0.4) !important; }
+
+.action-card {
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+    padding: 1.15rem 1.35rem;
+    margin-bottom: 0.85rem;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.action-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+.action-card.tier-critical {
+    border-left: 4px solid #DC2626;
+}
+.action-card.tier-important {
+    border-left: 4px solid #D97706;
+}
+.action-card.tier-minor {
+    border-left: 4px solid #2563EB;
+}
+[data-theme="dark"] .action-card {
+    background: #1E293B;
+    border-color: #334155;
+}
+[data-theme="dark"] .action-card.tier-critical {
+    border-left-color: #EF4444;
+}
+[data-theme="dark"] .action-card.tier-important {
+    border-left-color: #F59E0B;
+}
+[data-theme="dark"] .action-card.tier-minor {
+    border-left-color: #3B82F6;
+}
 </style>
 {% endblock %}
 
@@ -65,6 +99,90 @@
             </button>
         </form>
     </div>
+</div>
+
+<!-- Orchestrator Action Center Section -->
+<div class="card" id="action-center" style="margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <h2 style="margin: 0; font-size: 1.35rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <span>🎯</span>
+                    <span>Action Center: Prioritized Attention List</span>
+                </h2>
+                <span class="brand-badge badge-primary">{{ action_items|length }} Active</span>
+            </div>
+            <p style="color: var(--color-text-muted); font-size: 0.88rem; margin: 0.35rem 0 0;">
+                Read-only coordinator synthesizing pending content opportunities, catalog anomalies, cohort health, and safety compliance in priority order.
+            </p>
+        </div>
+        {% if dismissed_count > 0 %}
+        <div>
+            <form method="POST" action="{{ url_for('admin.action_center_restore') }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-outline btn-sm" style="font-size: 0.8rem; display: flex; align-items: center; gap: 0.35rem;">
+                    <span>🔄</span>
+                    <span>Restore {{ dismissed_count }} Dismissed Item{{ 's' if dismissed_count != 1 else '' }}</span>
+                </button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if action_items %}
+        <div class="action-items-list">
+            {% for item in action_items %}
+            <div class="action-card tier-{{ item.priority_tier|lower }}">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                        <span class="agent-badge-pill {% if item.priority_tier == 'Critical' %}agent-badge-failure{% elif item.priority_tier == 'Important' %}agent-badge-skipped{% else %}agent-badge-running{% endif %}">
+                            {{ item.priority_tier }} Priority
+                        </span>
+                        <span class="brand-badge {{ item.source_badge }}">
+                            {{ item.source }}
+                        </span>
+                        {% if item.subtitle %}
+                        <span style="font-size: 0.82rem; color: var(--color-text-muted); font-weight: 500;">
+                            {{ item.subtitle }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <form method="POST" action="{{ url_for('admin.action_center_dismiss') }}" style="display: inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            <input type="hidden" name="item_key" value="{{ item.key }}"/>
+                            <button type="submit" style="background: none; border: none; font-size: 0.78rem; color: var(--color-text-muted); cursor: pointer; text-decoration: underline; padding: 0;" title="Dismiss from this view (declutter only; does not modify underlying data)">
+                                Dismiss from view
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div style="font-size: 1.05rem; font-weight: 700; color: var(--color-text-main); margin-bottom: 0.35rem;">
+                    {{ item.title }}
+                </div>
+
+                <p style="font-size: 0.9rem; color: var(--color-text-muted); margin: 0 0 0.85rem 0; line-height: 1.45;">
+                    {{ item.summary }}
+                </p>
+
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <a href="{{ item.action_url }}" class="btn btn-primary btn-sm" style="font-size: 0.82rem; padding: 0.35rem 0.85rem; text-decoration: none;">
+                        {{ item.action_label }} &rarr;
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div style="padding: 2rem; text-align: center; color: #16A34A; background: #F0FDF4; border-radius: 8px; border: 1px solid #DCFCE7;">
+            <div style="font-size: 2rem; margin-bottom: 0.35rem;">✓</div>
+            <strong style="font-size: 1.05rem;">All Systems Nominal — Zero Prioritized Actions Needed</strong>
+            <p style="margin: 0.35rem 0 0; font-size: 0.88rem; color: #15803D;">
+                All catalog activities are verified, content coverage is robust across all cohorts, and safety compliance is clear.
+            </p>
+        </div>
+    {% endif %}
 </div>
 
 <!-- Grid Row: Health Score & Trend & Scheduler State -->

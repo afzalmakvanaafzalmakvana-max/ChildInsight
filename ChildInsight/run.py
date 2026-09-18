@@ -60,6 +60,10 @@ def run_seed_demo(fresh: bool = False):
     click.echo(f"  Categories:      {res['total_categories']} available ({res['created_categories']} newly created)")
     click.echo(f"  Activities:      {res['total_activities']} interactive activities ({res['created_activities']} newly created)")
     click.echo(f"  Questions:       {res['total_questions']} questions ({res['created_questions']} newly created)")
+    click.echo(f"  Translations:    {res['hindi_translated_activities']} Hindi translated ({res['english_fallback_activities']} English fallback)")
+    if 'category_translation_stats' in res:
+        for cat_name, stats in res['category_translation_stats'].items():
+            click.echo(f"    - {cat_name}: {stats['hindi']}/{stats['total']} Hindi translated ({stats['fallback']} fallback)")
     click.echo(f"  Demo Accounts:   {len(res['demo_users'])} verified ({', '.join(res['demo_users'])})")
     click.echo(f"  Demo Children:   {len(res['demo_children'])} profiles ({', '.join(res['demo_children'])})")
     click.echo(f"  Demo Sessions:   {res['demo_sessions']} completed sessions ({res['created_sessions']} newly created)")

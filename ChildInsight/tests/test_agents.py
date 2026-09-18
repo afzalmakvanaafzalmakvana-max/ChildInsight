@@ -181,17 +181,17 @@ class SystemAgentsTestCase(unittest.TestCase):
     # 4. Background Scheduler Runner Tests
     # -------------------------------------------------------------
     def test_scheduler_runs_idempotently(self):
-        """Verifies scheduler runs all 5 steps safely and idempotently."""
+        """Verifies scheduler runs all steps safely and idempotently."""
         seed_activities()
 
         result1 = scheduler.run_maintenance_pipeline(triggered_by='test')
         self.assertIn(result1['status'], ('success', 'partial_failure'))
-        self.assertEqual(len(result1['steps']), 6)
+        self.assertEqual(len(result1['steps']), 7)
 
         # Running a second time immediately should not fail or create duplicate recommendations
         result2 = scheduler.run_maintenance_pipeline(triggered_by='test')
         self.assertIn(result2['status'], ('success', 'partial_failure'))
-        self.assertEqual(len(result2['steps']), 6)
+        self.assertEqual(len(result2['steps']), 7)
 
     def test_scheduler_concurrency_lock_prevents_overlap(self):
         """Verifies concurrency lock prevents overlapping runs."""

@@ -321,6 +321,62 @@ class AgeBandActivitiesTestCase(unittest.TestCase):
         self.assertGreater(idx_90, idx_60)
         self.assertGreater(idx_60, idx_30)
 
+    def test_seeded_activities_hindi_translation_coverage_per_category(self):
+        """Confirm all 5 categories have 23 fully Hindi-translated activities covering all 4 difficulty levels."""
+        from app.agent import content_integrity_agent, compliance_agent
+
+        categories = Category.query.all()
+        self.assertEqual(len(categories), 5)
+        expected_categories = ['Visual Learning', 'Logic', 'Numbers', 'Language', 'Memory']
+        difficulty_levels = {'Beginner', 'Easy', 'Medium', 'Advanced'}
+
+        total_translated = 0
+        for cat in categories:
+            self.assertIn(cat.name, expected_categories)
+            activities = Activity.query.filter_by(category_id=cat.id).all()
+            self.assertEqual(len(activities), 23, f"Category '{cat.name}' must have exactly 23 activities")
+
+            cat_difficulties = set()
+            for act in activities:
+                # 1. Activity has valid Hindi translation with title and description
+                self.assertTrue(act.has_translation('hi'), f"Activity '{act.title}' is missing Hindi translation")
+                hi_trans = act.translations.get('hi', {})
+                self.assertTrue(bool(hi_trans.get('title')), f"Activity '{act.title}' missing Hindi title")
+                self.assertTrue(bool(hi_trans.get('description')), f"Activity '{act.title}' missing Hindi description")
+
+                # Track difficulty level
+                cat_difficulties.add(act.difficulty)
+
+                # 2. Every question has complete Hindi translation
+                questions = ActivityQuestion.query.filter_by(activity_id=act.id).all()
+                self.assertGreaterEqual(len(questions), 3, f"Activity '{act.title}' must have at least 3 questions")
+                for q in questions:
+                    self.assertIn('hi', q.translations, f"Question #{q.order_num} in '{act.title}' missing 'hi' key")
+                    q_hi = q.translations['hi']
+                    self.assertTrue(bool(q_hi.get('question_text')), f"Question #{q.order_num} in '{act.title}' missing Hindi question_text")
+                    self.assertTrue(bool(q_hi.get('correct_answer')), f"Question #{q.order_num} in '{act.title}' missing Hindi correct_answer")
+                    self.assertEqual(len(q_hi.get('options', [])), len(q.options), f"Question #{q.order_num} in '{act.title}' option count mismatch")
+                    self.assertIn(q_hi['correct_answer'], q_hi['options'], f"Question #{q.order_num} in '{act.title}' correct_answer not in options")
+
+                    # 3. Compliance check passes for all translated text
+                    for opt in q_hi['options']:
+                        safe, reason = compliance_agent.check_text(opt)
+                        self.assertTrue(safe, f"Non-compliant Hindi option in '{act.title}': {reason}")
+                    safe_q, reason_q = compliance_agent.check_text(q_hi['question_text'])
+                    self.assertTrue(safe_q, f"Non-compliant Hindi question_text in '{act.title}': {reason_q}")
+
+                total_translated += 1
+
+            # Assert all 4 difficulty levels are covered in this category
+            self.assertTrue(difficulty_levels.issubset(cat_difficulties), f"Category '{cat.name}' must cover all 4 difficulty levels: {cat_difficulties}")
+
+        self.assertEqual(total_translated, 115)
+
+        # 4. Zero incomplete_translation issues flagged by Content Integrity Agent
+        issues = content_integrity_agent.run_audit()
+        incomplete_trans_issues = [i for i in issues if i.get('issue_type') == 'incomplete_translation']
+        self.assertEqual(len(incomplete_trans_issues), 0, f"Found incomplete translation issues: {incomplete_trans_issues}")
+
 
 if __name__ == '__main__':
     unittest.main()

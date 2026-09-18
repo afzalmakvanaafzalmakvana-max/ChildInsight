@@ -130,6 +130,17 @@ class Phase10DeploymentTestCase(unittest.TestCase):
         recs = Recommendation.query.all()
         self.assertGreaterEqual(len(recs), 3)
 
+        # Check Hindi translation coverage reporting
+        self.assertIn('hindi_translated_activities', res)
+        self.assertIn('english_fallback_activities', res)
+        self.assertIn('category_translation_stats', res)
+        self.assertEqual(res['hindi_translated_activities'], 115)
+        self.assertEqual(res['english_fallback_activities'], 0)
+        self.assertEqual(len(res['category_translation_stats']), 5)
+        for cat_name, stats in res['category_translation_stats'].items():
+            self.assertEqual(stats['hindi'], 23, f"{cat_name} must have 23 Hindi translated activities")
+            self.assertEqual(stats['fallback'], 0, f"{cat_name} must have 0 English fallback activities")
+
     def test_ui_displays_demo_data_badge(self):
         """Verify that UI templates display the Demo Data badge for tagged activities and children."""
         # Seed demo environment

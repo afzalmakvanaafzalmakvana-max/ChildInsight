@@ -33,7 +33,13 @@ def seed_activities():
             min_age = act_data.get('min_age', 4)
             max_age = act_data.get('max_age', 14)
             hindi_trans = HINDI_ACTIVITY_TRANSLATIONS.get(act_data['title'])
-            trans_payload = {'hi': {'title': hindi_trans['title'], 'description': hindi_trans['description']}} if hindi_trans else None
+            trans_payload = None
+            if hindi_trans:
+                from app.agent import compliance_agent
+                t_safe, _ = compliance_agent.check_text(hindi_trans['title'])
+                d_safe, _ = compliance_agent.check_text(hindi_trans['description'])
+                if t_safe and d_safe:
+                    trans_payload = {'hi': {'title': hindi_trans['title'], 'description': hindi_trans['description']}}
 
             activity = Activity.query.filter_by(category_id=category.id, title=act_data['title']).first()
             if not activity:
@@ -67,14 +73,21 @@ def seed_activities():
                 q_trans_payload = None
                 if hindi_trans and idx <= len(hindi_trans['questions']):
                     qh = hindi_trans['questions'][idx - 1]
-                    q_trans_payload = {
-                        'hi': {
-                            'question_text': qh['text'],
-                            'options': qh['options'],
-                            'correct_answer': qh['answer'],
-                            'hint': qh.get('hint')
+                    # Every translated question must pass the Hindi-aware Compliance Agent check before being saved
+                    from app.agent import compliance_agent
+                    texts_to_check = [qh['text'], qh['answer']] + list(qh['options'])
+                    if qh.get('hint'):
+                        texts_to_check.append(qh['hint'])
+
+                    if all(compliance_agent.check_text(t)[0] for t in texts_to_check):
+                        q_trans_payload = {
+                            'hi': {
+                                'question_text': qh['text'],
+                                'options': qh['options'],
+                                'correct_answer': qh['answer'],
+                                'hint': qh.get('hint')
+                            }
                         }
-                    }
 
                 question = ActivityQuestion.query.filter_by(
                     activity_id=activity.id,
@@ -328,6 +341,41 @@ def seed_demo_data(fresh: bool = False):
         ActivitySession.child_id.in_([c.id for c in children])
     ).count()
 
+    # Calculate Hindi translation coverage statistics
+    all_activities = Activity.query.all()
+    hindi_translated_count = 0
+    english_fallback_count = 0
+    category_translation_stats = {}
+
+    for cat in Category.query.all():
+        cat_acts = [a for a in all_activities if a.category_id == cat.id]
+        cat_hi = 0
+        cat_fallback = 0
+        for act in cat_acts:
+            has_hi_title = act.has_translation('hi')
+            qs = ActivityQuestion.query.filter_by(activity_id=act.id).all()
+            all_qs_hi = (
+                len(qs) > 0 and
+                all(
+                    'hi' in q.translations and
+                    bool(q.translations['hi'].get('question_text')) and
+                    bool(q.translations['hi'].get('options')) and
+                    bool(q.translations['hi'].get('correct_answer'))
+                    for q in qs
+                )
+            )
+            if has_hi_title and all_qs_hi:
+                cat_hi += 1
+            else:
+                cat_fallback += 1
+        category_translation_stats[cat.name] = {
+            'hindi': cat_hi,
+            'fallback': cat_fallback,
+            'total': len(cat_acts)
+        }
+        hindi_translated_count += cat_hi
+        english_fallback_count += cat_fallback
+
     return {
         'users_before': users_before,
         'users_after': users_after,
@@ -340,6 +388,9 @@ def seed_demo_data(fresh: bool = False):
         'total_activities': Activity.query.count(),
         'created_questions': created_qs,
         'total_questions': ActivityQuestion.query.count(),
+        'hindi_translated_activities': hindi_translated_count,
+        'english_fallback_activities': english_fallback_count,
+        'category_translation_stats': category_translation_stats,
         'created_children': created_children,
         'total_children': Child.query.count(),
         'demo_children': [c['name'] for c in demo_children_spec],

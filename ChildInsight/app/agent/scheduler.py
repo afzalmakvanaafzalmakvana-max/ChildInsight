@@ -9,7 +9,7 @@ from app.models.progress import ProgressRecord
 from app.models.recommendation import Recommendation
 from app.services import analytics_service, recommendation_service
 from app.ml import model_manager
-from app.agent import compliance_agent, content_integrity_agent, content_suggestion_agent, health_agent
+from app.agent import compliance_agent, content_integrity_agent, content_suggestion_agent, health_agent, orchestrator_agent
 
 logger = logging.getLogger('childinsight.scheduler')
 
@@ -41,6 +41,7 @@ def run_maintenance_pipeline(triggered_by: str = 'scheduler') -> dict:
     4. Run content integrity + compliance sweep
     5. Generate adaptive content suggestions based on learner demographics and gaps
     6. Record platform health snapshot
+    7. Consolidate Orchestrator prioritized action items
 
     Uses a concurrency lock to prevent overlapping runs.
     Each step is isolated in its own try/except block so a failure in one step
@@ -253,6 +254,35 @@ def run_maintenance_pipeline(triggered_by: str = 'scheduler') -> dict:
                 'name': 'Record Health Snapshot',
                 'status': 'failure',
                 'message': f"Error recording health snapshot: {str(e)}",
+                'duration': round(time.time() - step_start, 3)
+            })
+
+        # -------------------------------------------------------------
+        # Step 7: Consolidate Orchestrator Action Items
+        # -------------------------------------------------------------
+        step_start = time.time()
+        try:
+            action_items = orchestrator_agent.get_action_items()
+            critical_count = sum(1 for i in action_items if i.get('priority_tier') == 'Critical')
+            important_count = sum(1 for i in action_items if i.get('priority_tier') == 'Important')
+            minor_count = sum(1 for i in action_items if i.get('priority_tier') == 'Minor')
+            msg = (
+                f"Synthesized {len(action_items)} action items: "
+                f"{critical_count} Critical, {important_count} Important, {minor_count} Minor."
+            )
+            steps_results.append({
+                'name': 'Consolidate Orchestrator Action Items',
+                'status': 'success',
+                'message': msg,
+                'duration': round(time.time() - step_start, 3)
+            })
+        except Exception as e:
+            logger.exception("Step 7 failed in maintenance pipeline: %s", str(e))
+            overall_status = 'partial_failure'
+            steps_results.append({
+                'name': 'Consolidate Orchestrator Action Items',
+                'status': 'failure',
+                'message': f"Error synthesizing orchestrator items: {str(e)}",
                 'duration': round(time.time() - step_start, 3)
             })
 

@@ -13,7 +13,14 @@ structured recommendations stored in `content_suggestions` for human review.
 """
 
 from datetime import datetime, timezone
+import json
 import logging
+import os
+import re
+import urllib.request
+import urllib.error
+from collections import Counter
+
 from app import db
 from app.models.child import Child
 from app.models.activity import Category, Activity
@@ -42,6 +49,201 @@ AGE_BANDS = [
     (9, 12, '9-12', 'Upper Elementary'),
     (12, 14, '12-14', 'Early Secondary')
 ]
+
+DIFFICULTY_PROGRESSION = {
+    'Beginner': 'Easy',
+    'Easy': 'Medium',
+    'Medium': 'Advanced'
+}
+
+
+# =============================================================================
+# NUMERIC VALIDATION & AI REPHRASING HELPERS
+# =============================================================================
+
+def validate_reason_numbers(text: str, expected_numbers: list[int | float] | dict) -> bool:
+    """
+    Validates that every number in text matches the expected numbers list exactly:
+    - No missing required numbers
+    - No added numbers that were not provided
+    - Exact frequency count matching (multiset comparison)
+    """
+    if not text:
+        return False
+
+    if isinstance(expected_numbers, dict):
+        expected_list = [v for v in expected_numbers.values() if isinstance(v, (int, float))]
+    elif isinstance(expected_numbers, (list, tuple)):
+        expected_list = [v for v in expected_numbers if isinstance(v, (int, float))]
+    else:
+        return False
+
+    raw_found = re.findall(r'\b\d+(?:\.\d+)?\b', text)
+    try:
+        found_numbers = [float(x) for x in raw_found]
+        expected_floats = [float(x) for x in expected_list]
+    except (ValueError, TypeError):
+        return False
+
+    return Counter(found_numbers) == Counter(expected_floats)
+
+
+def _call_anthropic_api_rephrase(system_prompt: str, user_prompt: str) -> str | None:
+    """
+    Calls the Anthropic Messages API (claude-3-5-sonnet-20241022) to rephrase
+    the content gap reason into a single natural, professional sentence.
+    Returns None if ANTHROPIC_API_KEY is not set or if any network/API error occurs.
+    """
+    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    if not api_key:
+        return None
+
+    model = os.environ.get('ANTHROPIC_MODEL', 'claude-3-5-sonnet-20241022')
+    url = "https://api.anthropic.com/v1/messages"
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+    }
+
+    payload = {
+        "model": model,
+        "max_tokens": 300,
+        "temperature": 0.2,
+        "system": system_prompt,
+        "messages": [
+            {"role": "user", "content": user_prompt}
+        ]
+    }
+
+    data = json.dumps(payload).encode('utf-8')
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            res_body = response.read().decode('utf-8')
+            res_json = json.loads(res_body)
+
+        content_blocks = res_json.get('content', [])
+        raw_text = "".join(b.get('text', '') for b in content_blocks if b.get('type') == 'text')
+        return raw_text.strip()
+    except Exception as e:
+        logger.warning(f"Anthropic API call for reason rephrase failed ({e}). Falling back to template.")
+        return None
+
+
+def rephrase_reason_with_ai(
+    template_reason: str,
+    computed_numbers: dict | list,
+    category_name: str = None,
+    suggestion_type: str = None
+) -> str:
+    """
+    Optionally calls the Anthropic API to phrase the reason as a single natural,
+    professional sentence using the exact computed numbers.
+    Strictly validates after generation that every number in the AI-phrased sentence
+    matches the original computed values.
+    If the AI text is missing a required number or adds one that wasn't provided,
+    or fails compliance check, discards it and falls back to template_reason.
+    """
+    if not template_reason:
+        return template_reason
+
+    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    if not api_key:
+        return template_reason
+
+    try:
+        # Normalize expected numbers to list of floats
+        if isinstance(computed_numbers, dict):
+            expected_numbers_list = [v for v in computed_numbers.values() if isinstance(v, (int, float))]
+            numbers_bullets = "\n".join(f"- {k.replace('_', ' ')}: {v}" for k, v in computed_numbers.items())
+        elif isinstance(computed_numbers, (list, tuple)):
+            expected_numbers_list = [v for v in computed_numbers if isinstance(v, (int, float))]
+            numbers_bullets = "\n".join(f"- value: {v}" for v in computed_numbers)
+        else:
+            return template_reason
+
+        system_prompt = (
+            "You are an educational curriculum assistant for ChildInsight. "
+            "Your task is to rephrase an educational content gap reason into a single natural, professional sentence.\n\n"
+            "STRICT RULES:\n"
+            "1. Output MUST be a single natural, professional sentence.\n"
+            "2. You MUST use the exact numbers provided below in digits (e.g., 14, 9, 12, 82, 1, 3). "
+            "Never write numbers as words (do NOT write 'three' or 'one').\n"
+            "3. You must NEVER invent, estimate, round, or alter any number.\n"
+            "4. Every number in your sentence must come from the provided list. Do NOT introduce ANY other numbers.\n"
+            "5. Do NOT use clinical or diagnostic language (e.g., disorder, deficit, abnormal, impaired, iq).\n"
+            "6. Output ONLY the rephrased sentence, without quotes, explanations, or prefixes."
+        )
+
+        user_prompt = (
+            f"Original template reason:\n{template_reason}\n\n"
+            f"Exact computed numbers that MUST appear in the sentence:\n{numbers_bullets}\n\n"
+            "Rephrase this as a single natural, professional sentence containing these exact numbers:"
+        )
+
+        ai_text = _call_anthropic_api_rephrase(system_prompt, user_prompt)
+        if not ai_text:
+            return template_reason
+
+        # Strip surrounding quotes if any
+        ai_text = ai_text.strip().strip('"\'').strip()
+
+        # Check PRD §4 compliance
+        from app.agent import compliance_agent
+        is_safe, reason_violation = compliance_agent.check_text(ai_text)
+        if not is_safe:
+            logger.warning(f"AI-rephrased reason failed compliance check ({reason_violation}). Falling back to template.")
+            return template_reason
+
+        # Validate that every number matches the original computed values
+        if not validate_reason_numbers(ai_text, expected_numbers_list):
+            logger.warning(
+                f"AI-rephrased reason failed numeric validation (numbers did not match computed values). "
+                f"Falling back to template. AI text: {ai_text}"
+            )
+            return template_reason
+
+        return ai_text
+
+    except Exception as e:
+        logger.warning(f"Error during AI reason rephrasing ({e}). Falling back to template.")
+        return template_reason
+
+
+def format_suggestion_reason(spec: dict, persistence_count: int = 1) -> str:
+    """
+    Formats the suggestion reason using the deterministic template generator,
+    then optionally attempts AI rephrasing if ANTHROPIC_API_KEY is available.
+    If rephrasing fails, misses any number, adds any unprovided number, or violates
+    compliance, returns the base template reason string.
+    """
+    if callable(spec.get('format_reason')):
+        base_reason = spec['format_reason'](persistence_count)
+    elif spec.get('reason'):
+        base_reason = spec['reason']
+    else:
+        base_reason = ''
+
+    if not base_reason:
+        return ''
+
+    # Extract computed numbers for this run
+    c_nums = None
+    if callable(spec.get('get_computed_numbers')):
+        c_nums = spec['get_computed_numbers'](persistence_count)
+    elif spec.get('computed_numbers'):
+        c_nums = spec['computed_numbers']
+
+    if c_nums:
+        return rephrase_reason_with_ai(
+            template_reason=base_reason,
+            computed_numbers=c_nums,
+            category_name=spec.get('suggested_title'),
+            suggestion_type=spec.get('suggestion_type')
+        )
+    return base_reason
 
 DIFFICULTY_PROGRESSION = {
     'Beginner': 'Easy',
@@ -191,6 +393,16 @@ def detect_gaps(analysis: dict) -> list:
                                 f"this gap has persisted for {runs} scheduler run(s)."
                             )
 
+                        def get_prog_numbers(runs, aff=affected_kids, acc=avg_acc, n_cnt=next_count, min_age=min_a, max_age=max_a):
+                            return {
+                                'affected_children': aff,
+                                'min_age': min_age,
+                                'max_age': max_age,
+                                'average_accuracy': int(round(acc)),
+                                'available_next_activities': n_cnt,
+                                'persistence_count': runs
+                            }
+
                         priority = calculate_priority_score(affected_kids, 1, trend)
                         suggestions.append({
                             'suggestion_type': ContentSuggestion.TYPE_PROGRESSION_GAP,
@@ -202,6 +414,7 @@ def detect_gaps(analysis: dict) -> list:
                             'trend': trend,
                             'priority_score': priority,
                             'format_reason': make_progression_reason,
+                            'get_computed_numbers': get_prog_numbers,
                             'reason': make_progression_reason(1)
                         })
 
@@ -231,6 +444,15 @@ def detect_gaps(analysis: dict) -> list:
                         f"Expanding content for age band {b_lbl} will ensure age-appropriate learning coverage."
                     )
 
+                def get_age_numbers(runs, aff=learner_count, a_cnt=act_count, min_age=min_a, max_age=max_a):
+                    return {
+                        'affected_children': aff,
+                        'min_age': min_age,
+                        'max_age': max_age,
+                        'available_activities': a_cnt,
+                        'persistence_count': runs
+                    }
+
                 priority = calculate_priority_score(learner_count, 1, trend)
                 suggestions.append({
                     'suggestion_type': ContentSuggestion.TYPE_AGE_COVERAGE_GAP,
@@ -242,6 +464,7 @@ def detect_gaps(analysis: dict) -> list:
                     'trend': trend,
                     'priority_score': priority,
                     'format_reason': make_age_reason,
+                    'get_computed_numbers': get_age_numbers,
                     'reason': make_age_reason(1)
                 })
 
@@ -274,6 +497,19 @@ def detect_gaps(analysis: dict) -> list:
                     f"this gap has persisted for {runs} scheduler run(s). Adding introductory activities will balance the educational catalog."
                 )
 
+            def get_imbalance_numbers(runs, aff=affected_kids, cnt=count, avg=avg_acts, b_tag=band_tag):
+                c_nums = {
+                    'affected_children': aff,
+                    'activity_count': cnt,
+                    'platform_average': round(avg, 1),
+                    'persistence_count': runs
+                }
+                band_nums = [int(x) for x in re.findall(r'\b\d+\b', b_tag)]
+                if len(band_nums) == 2:
+                    c_nums['min_age'] = band_nums[0]
+                    c_nums['max_age'] = band_nums[1]
+                return c_nums
+
             priority = calculate_priority_score(affected_kids, 1, trend)
             suggestions.append({
                 'suggestion_type': ContentSuggestion.TYPE_CONTENT_IMBALANCE,
@@ -285,6 +521,7 @@ def detect_gaps(analysis: dict) -> list:
                 'trend': trend,
                 'priority_score': priority,
                 'format_reason': make_imbalance_reason,
+                'get_computed_numbers': get_imbalance_numbers,
                 'reason': make_imbalance_reason(1)
             })
 
@@ -309,6 +546,16 @@ def detect_gaps(analysis: dict) -> list:
                     f"to enrich STEM inquiry without overloading existing cognitive domains."
                 )
 
+            def get_new_cat_numbers(runs, aff=total_learners, sess=total_sessions, c_cnt=len(analysis['categories'])):
+                return {
+                    'affected_children': aff,
+                    'category_count': c_cnt,
+                    'completed_sessions': sess,
+                    'min_age': 4,
+                    'max_age': 14,
+                    'persistence_count': runs
+                }
+
             priority = calculate_priority_score(total_learners, 1, trend)
             suggestions.append({
                 'suggestion_type': ContentSuggestion.TYPE_NEW_CATEGORY,
@@ -320,6 +567,7 @@ def detect_gaps(analysis: dict) -> list:
                 'trend': trend,
                 'priority_score': priority,
                 'format_reason': make_new_cat_reason,
+                'get_computed_numbers': get_new_cat_numbers,
                 'reason': make_new_cat_reason(1)
             })
 
@@ -357,6 +605,17 @@ def detect_gaps(analysis: dict) -> list:
                         f"Translating or authoring Hindi content for age band {b_lbl} will ensure native-language cognitive access."
                     )
 
+                def get_trans_numbers(runs, aff=hindi_count, t_cnt=translated_count, a_cnt=act_count, pct=trans_pct, min_age=min_a, max_age=max_a):
+                    return {
+                        'affected_children': aff,
+                        'min_age': min_age,
+                        'max_age': max_age,
+                        'translated_activities': t_cnt,
+                        'total_activities': a_cnt,
+                        'translated_percent': int(round(pct)),
+                        'persistence_count': runs
+                    }
+
                 priority = calculate_priority_score(hindi_count, 1, trend)
                 suggestions.append({
                     'suggestion_type': ContentSuggestion.TYPE_TRANSLATION_GAP,
@@ -368,6 +627,7 @@ def detect_gaps(analysis: dict) -> list:
                     'trend': trend,
                     'priority_score': priority,
                     'format_reason': make_trans_reason,
+                    'get_computed_numbers': get_trans_numbers,
                     'reason': make_trans_reason(1)
                 })
 
@@ -558,6 +818,7 @@ def consolidate_gap_specs(gap_specs: list, categories: list = None) -> list:
                 'trend': merged_trend,
                 'priority_score': merged_priority,
                 'format_reason': make_merged_reason,
+                'get_computed_numbers': primary_spec.get('get_computed_numbers'),
                 'reason': make_merged_reason(1)
             }
             consolidated_specs.append(merged_spec)
@@ -722,10 +983,7 @@ def generate_suggestions(persist: bool = True) -> list:
             elif not existing.age_band:
                 existing.age_band = spec.get('age_band')
 
-            if callable(spec.get('format_reason')):
-                existing.reason = spec['format_reason'](existing.persistence_count)
-            elif spec.get('reason'):
-                existing.reason = spec['reason']
+            existing.reason = format_suggestion_reason(spec, existing.persistence_count)
 
             if persist:
                 for duplicate in matching_existing:
@@ -742,10 +1000,7 @@ def generate_suggestions(persist: bool = True) -> list:
             new_persistence,
             spec.get('trend', 'steady')
         )
-        if callable(spec.get('format_reason')):
-            reason_text = spec['format_reason'](new_persistence)
-        else:
-            reason_text = spec.get('reason', '')
+        reason_text = format_suggestion_reason(spec, new_persistence)
 
         suggestion = ContentSuggestion(
             suggestion_type=spec['suggestion_type'],

@@ -1,7 +1,7 @@
 import json
 import re
 from datetime import datetime, timezone
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, session
 from flask_login import login_required, current_user
 from app import db
 from app.models.user import User
@@ -993,8 +993,13 @@ def question_delete(activity_id, question_id):
 @login_required
 @role_required('admin')
 def agents_dashboard():
-    """System Agents read-only status and health telemetry dashboard."""
-    from app.agent import scheduler, health_agent, content_integrity_agent, compliance_agent
+    """System Agents read-only status, health telemetry, and orchestrator action center."""
+    from app.agent import scheduler, health_agent, content_integrity_agent, compliance_agent, orchestrator_agent
+
+    dismissed_keys = set(session.get('orchestrator_dismissed_keys', []))
+    all_action_items = orchestrator_agent.get_action_items(dismissed_keys=dismissed_keys)
+    action_items = [i for i in all_action_items if not i.get('is_dismissed')]
+    dismissed_count = len(all_action_items) - len(action_items)
 
     last_run = scheduler.get_last_run_status()
     health_metrics = health_agent.compute_health_metrics()
@@ -1014,6 +1019,8 @@ def agents_dashboard():
 
     return render_template(
         'admin/agents.html',
+        action_items=action_items,
+        dismissed_count=dismissed_count,
         last_run=last_run,
         health_metrics=health_metrics,
         trend_labels_json=json.dumps(trend_labels),
@@ -1048,6 +1055,42 @@ def run_agents_pipeline():
         flash(f"Agent pipeline executed successfully (Score: {result.get('health_score')}/100 in {result.get('duration_seconds')}s).", "success")
 
     return redirect(url_for('admin.agents_dashboard'))
+
+
+@admin_bp.route('/action-center')
+@login_required
+@role_required('admin')
+def action_center():
+    """Route alias to the Orchestrator Action Center on the System Agents dashboard."""
+    return redirect(url_for('admin.agents_dashboard') + '#action-center')
+
+
+@admin_bp.route('/action-center/dismiss', methods=['POST'])
+@login_required
+@role_required('admin')
+def action_center_dismiss():
+    """Dismisses an action item from the orchestrator view (decluttering only; zero database mutations)."""
+    from app.agent import orchestrator_agent
+    item_key = request.form.get('item_key', '').strip()
+    if item_key:
+        dismissed = set(session.get('orchestrator_dismissed_keys', []))
+        dismissed.add(item_key)
+        session['orchestrator_dismissed_keys'] = list(dismissed)
+        orchestrator_agent.dismiss_action_item(item_key)
+        flash("Item dismissed from Action Center view.", "info")
+    return redirect(url_for('admin.agents_dashboard') + '#action-center')
+
+
+@admin_bp.route('/action-center/restore', methods=['POST'])
+@login_required
+@role_required('admin')
+def action_center_restore():
+    """Restores all dismissed action items back into the orchestrator view."""
+    from app.agent import orchestrator_agent
+    session.pop('orchestrator_dismissed_keys', None)
+    orchestrator_agent.clear_dismissed_items()
+    flash("All dismissed items restored to Action Center view.", "success")
+    return redirect(url_for('admin.agents_dashboard') + '#action-center')
 
 
 # =============================================================================

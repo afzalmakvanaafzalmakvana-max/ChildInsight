@@ -16,16 +16,17 @@
             <li><a href="{{ url_for('admin.activities_list') }}" class="nav-link{% if request.endpoint in ['admin.activities_list', 'admin.activity_new', 'admin.activity_edit', 'admin.activity_questions', 'admin.question_new', 'admin.question_edit'] %} active{% endif %}">Activities</a></li>
             <li><a href="{{ url_for('admin.assignments') }}" class="nav-link{% if request.endpoint == 'admin.assignments' %} active{% endif %}">Teacher Assignments</a></li>
             <li class="nav-dropdown">
-                <button type="button" class="nav-link nav-dropdown-toggle{% if request.endpoint in ['admin.audit_logs', 'admin.agents_dashboard', 'admin.content_suggestions'] %} active{% endif %}" aria-expanded="false" aria-haspopup="true" id="adminSystemDropdown">
+                <button type="button" class="nav-link nav-dropdown-toggle{% if request.endpoint in ['admin.audit_logs', 'admin.agents_dashboard', 'admin.content_suggestions', 'admin.action_center'] %} active{% endif %}" aria-expanded="false" aria-haspopup="true" id="adminSystemDropdown">
                     <span>System</span>
                     <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="6 9 12 15 18 9"></polyline>
                     </svg>
                 </button>
                 <ul class="dropdown-menu" aria-labelledby="adminSystemDropdown">
-                    <li><a href="{{ url_for('admin.audit_logs') }}" class="dropdown-item{% if request.endpoint == 'admin.audit_logs' %} active{% endif %}">📋 Audit Logs</a></li>
+                    <li><a href="{{ url_for('admin.action_center') }}" class="dropdown-item{% if request.endpoint == 'admin.action_center' %} active{% endif %}">🎯 Action Center</a></li>
                     <li><a href="{{ url_for('admin.agents_dashboard') }}" class="dropdown-item{% if request.endpoint == 'admin.agents_dashboard' %} active{% endif %}">🤖 System Agents</a></li>
                     <li><a href="{{ url_for('admin.content_suggestions') }}" class="dropdown-item{% if request.endpoint == 'admin.content_suggestions' %} active{% endif %}">💡 Content Suggestions</a></li>
+                    <li><a href="{{ url_for('admin.audit_logs') }}" class="dropdown-item{% if request.endpoint == 'admin.audit_logs' %} active{% endif %}">📋 Audit Logs</a></li>
                 </ul>
             </li>
         </ul>
@@ -51,6 +52,7 @@
         <a href="{{ url_for('admin.categories_list') }}" class="btn btn-outline btn-sm">Manage Categories</a>
         <a href="{{ url_for('admin.activities_list') }}" class="btn btn-outline btn-sm">Manage Activities</a>
         <a href="{{ url_for('admin.assignments') }}" class="btn btn-outline btn-sm">Manage Assignments</a>
+        <a href="{{ url_for('admin.action_center') }}" class="btn btn-outline btn-sm">🎯 Action Center</a>
         <a href="{{ url_for('admin.agents_dashboard') }}" class="btn btn-outline btn-sm">System Agents</a>
         <a href="{{ url_for('admin.content_suggestions') }}" class="btn btn-outline btn-sm">Content Suggestions</a>
     </div>

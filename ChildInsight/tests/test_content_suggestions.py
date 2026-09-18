@@ -1,5 +1,7 @@
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timezone
+import os
 from app import create_app, db
 from app.models.user import User
 from app.models.child import Child
@@ -529,6 +531,181 @@ class ContentSuggestionsTestCase(unittest.TestCase):
         score_steady = content_suggestion_agent.calculate_priority_score(5, 1, 'steady')
         score_declining = content_suggestion_agent.calculate_priority_score(5, 1, 'declining')
         self.assertEqual(score_declining, score_steady + 5.0)
+
+    # -------------------------------------------------------------------------
+    # AI Reason Rephrasing & Numeric Validation Tests
+    # -------------------------------------------------------------------------
+
+    def test_validate_reason_numbers_exact_match(self):
+        """Verify validate_reason_numbers returns True when exact numbers match in frequency."""
+        # Progression gap numbers: 14 kids, ages 9-12, 82% accuracy, 1 activity, 3 runs
+        expected = [14, 9, 12, 82, 1, 3]
+        valid_sentence = (
+            "Across 3 scheduler runs, 14 children aged 9-12 demonstrated an average accuracy of 82% "
+            "in Medium Logic, while only 1 Advanced activity remains available."
+        )
+        self.assertTrue(content_suggestion_agent.validate_reason_numbers(valid_sentence, expected))
+
+        # Dict format input
+        expected_dict = {
+            'affected_children': 14,
+            'min_age': 9,
+            'max_age': 12,
+            'accuracy': 82,
+            'available_activities': 1,
+            'persistence_count': 3
+        }
+        self.assertTrue(content_suggestion_agent.validate_reason_numbers(valid_sentence, expected_dict))
+
+    def test_validate_reason_numbers_missing_number_fails(self):
+        """Verify validate_reason_numbers returns False if the text omits any required number."""
+        expected = [14, 9, 12, 82, 1, 3]
+        # Missing persistence count 3
+        missing_runs = (
+            "14 children aged 9-12 demonstrated an average accuracy of 82% "
+            "in Medium Logic, while only 1 Advanced activity remains available."
+        )
+        self.assertFalse(content_suggestion_agent.validate_reason_numbers(missing_runs, expected))
+
+    def test_validate_reason_numbers_extra_number_fails(self):
+        """Verify validate_reason_numbers returns False if the text introduces an unprovided number."""
+        expected = [14, 9, 12, 82, 1, 3]
+        # Injects unprovided number 5
+        extra_number = (
+            "Across 3 scheduler runs, 14 children aged 9-12 in group 5 demonstrated an average accuracy of 82% "
+            "in Medium Logic, while only 1 Advanced activity remains available."
+        )
+        self.assertFalse(content_suggestion_agent.validate_reason_numbers(extra_number, expected))
+
+    def test_validate_reason_numbers_altered_number_fails(self):
+        """Verify validate_reason_numbers returns False if a number was altered or rounded."""
+        expected = [14, 9, 12, 82, 1, 3]
+        # Altered 82 to 80
+        altered_number = (
+            "Across 3 scheduler runs, 14 children aged 9-12 demonstrated an average accuracy of 80% "
+            "in Medium Logic, while only 1 Advanced activity remains available."
+        )
+        self.assertFalse(content_suggestion_agent.validate_reason_numbers(altered_number, expected))
+
+    def test_validate_reason_numbers_spelled_words_fails(self):
+        """Verify validate_reason_numbers returns False if digits are replaced with words."""
+        expected = [14, 9, 12, 82, 1, 3]
+        # Uses 'three' and 'one' instead of digits
+        word_numbers = (
+            "Across three scheduler runs, 14 children aged 9-12 demonstrated an average accuracy of 82% "
+            "in Medium Logic, while only one Advanced activity remains available."
+        )
+        self.assertFalse(content_suggestion_agent.validate_reason_numbers(word_numbers, expected))
+
+    def test_rephrase_reason_with_ai_fallback_on_invalid_numbers(self):
+        """Verify rephrase_reason_with_ai discards AI text and falls back to template if numbers are altered."""
+        template = (
+            "14 children aged 9-12 are averaging 82% accuracy in Medium Logic with steady engagement, "
+            "but only 1 Advanced activity(ies) available — this gap has persisted for 3 scheduler run(s)."
+        )
+        computed = {'affected': 14, 'min': 9, 'max': 12, 'acc': 82, 'acts': 1, 'runs': 3}
+
+        # Mock Anthropic returning an altered number (80% instead of 82%)
+        with patch.dict(os.environ, {'ANTHROPIC_API_KEY': 'test-key'}):
+            with patch('app.agent.content_suggestion_agent._call_anthropic_api_rephrase') as mock_api:
+                mock_api.return_value = (
+                    "Across 3 scheduler runs, 14 children aged 9-12 achieved 80% accuracy in Medium Logic "
+                    "with only 1 Advanced activity available."
+                )
+                result = content_suggestion_agent.rephrase_reason_with_ai(template, computed)
+                self.assertEqual(result, template, "Must fall back to template reason when numbers do not match")
+
+    def test_rephrase_reason_with_ai_fallback_on_missing_numbers(self):
+        """Verify rephrase_reason_with_ai discards AI text and falls back to template if a number is missing."""
+        template = (
+            "14 children aged 9-12 are averaging 82% accuracy in Medium Logic with steady engagement, "
+            "but only 1 Advanced activity(ies) available — this gap has persisted for 3 scheduler run(s)."
+        )
+        computed = {'affected': 14, 'min': 9, 'max': 12, 'acc': 82, 'acts': 1, 'runs': 3}
+
+        # Mock Anthropic omitting the persistence count (3)
+        with patch.dict(os.environ, {'ANTHROPIC_API_KEY': 'test-key'}):
+            with patch('app.agent.content_suggestion_agent._call_anthropic_api_rephrase') as mock_api:
+                mock_api.return_value = (
+                    "14 children aged 9-12 achieved 82% accuracy in Medium Logic with only 1 Advanced activity available."
+                )
+                result = content_suggestion_agent.rephrase_reason_with_ai(template, computed)
+                self.assertEqual(result, template, "Must fall back to template reason when a number is missing")
+
+    def test_rephrase_reason_with_ai_success_on_valid_numbers(self):
+        """Verify rephrase_reason_with_ai returns the AI-phrased text when all numbers match exactly."""
+        template = (
+            "14 children aged 9-12 are averaging 82% accuracy in Medium Logic with steady engagement, "
+            "but only 1 Advanced activity(ies) available — this gap has persisted for 3 scheduler run(s)."
+        )
+        computed = {'affected': 14, 'min': 9, 'max': 12, 'acc': 82, 'acts': 1, 'runs': 3}
+        ai_sentence = (
+            "Across 3 scheduler runs, 14 children aged 9-12 demonstrated strong performance averaging 82% accuracy "
+            "in Medium Logic, but currently only 1 Advanced challenge is available."
+        )
+
+        with patch.dict(os.environ, {'ANTHROPIC_API_KEY': 'test-key'}):
+            with patch('app.agent.content_suggestion_agent._call_anthropic_api_rephrase') as mock_api:
+                mock_api.return_value = ai_sentence
+                result = content_suggestion_agent.rephrase_reason_with_ai(template, computed)
+                self.assertEqual(result, ai_sentence, "Must adopt the AI-rephrased reason when all numbers match")
+
+    def test_rephrase_reason_with_ai_fallback_when_api_key_unset(self):
+        """Verify rephrase_reason_with_ai immediately returns template reason when ANTHROPIC_API_KEY is not set."""
+        template = "2 registered learner(s) in age band 4-6 currently have only 0 activity(ies) available in 'Visual Learning'."
+        computed = {'affected': 2, 'min': 4, 'max': 6, 'acts': 0, 'runs': 1}
+
+        with patch.dict(os.environ, {}, clear=True):
+            result = content_suggestion_agent.rephrase_reason_with_ai(template, computed)
+            self.assertEqual(result, template)
+
+    def test_rephrase_reason_with_ai_compliance_fallback(self):
+        """Verify rephrase_reason_with_ai discards AI text and falls back to template if clinical terms appear."""
+        template = "14 children aged 9-12 are averaging 82% accuracy in Medium Logic with only 1 activity available."
+        computed = {'affected': 14, 'min': 9, 'max': 12, 'acc': 82, 'acts': 1}
+
+        # AI text includes forbidden term 'deficit'
+        with patch.dict(os.environ, {'ANTHROPIC_API_KEY': 'test-key'}):
+            with patch('app.agent.content_suggestion_agent._call_anthropic_api_rephrase') as mock_api:
+                mock_api.return_value = (
+                    "Across 14 children aged 9-12 with 82% accuracy, there is a deficit with only 1 activity available."
+                )
+                result = content_suggestion_agent.rephrase_reason_with_ai(template, computed)
+                self.assertEqual(result, template, "Must block clinical terms and fall back to template")
+
+    def test_generate_suggestions_uses_rephrased_reason_when_ai_valid(self):
+        """Verify generate_suggestions applies AI rephrasing when valid and falls back when numbers are invalid."""
+        # Create a child to trigger an age coverage gap
+        teen = Child(name='Zane Teen', age=13, parent_id=self.parent.id)
+        db.session.add(teen)
+        db.session.commit()
+
+        # Zane is age 13 -> age band 12-14. Visual Learning has 0 activities.
+        # Template reason has numbers: 1 (learner), 12, 14 (ages), 0 (acts), 1 (runs).
+        valid_rephrase = (
+            "Across 1 scheduler run, 1 registered learner in age band 12-14 has only 0 activities available in Visual Learning."
+        )
+
+        with patch.dict(os.environ, {'ANTHROPIC_API_KEY': 'test-key'}):
+            with patch('app.agent.content_suggestion_agent._call_anthropic_api_rephrase') as mock_api:
+                mock_api.return_value = valid_rephrase
+                suggestions = content_suggestion_agent.generate_suggestions(persist=False)
+                visual_gap = next((s for s in suggestions if s.category_id == self.cat_visual.id and s.age_band == '12-14'), None)
+                self.assertIsNotNone(visual_gap)
+                self.assertEqual(visual_gap.reason, valid_rephrase)
+
+        # Now test with invalid numbers (e.g. AI invents 99)
+        invalid_rephrase = (
+            "Across 1 scheduler run, 99 registered learners in age band 12-14 have only 0 activities available in Visual Learning."
+        )
+        with patch.dict(os.environ, {'ANTHROPIC_API_KEY': 'test-key'}):
+            with patch('app.agent.content_suggestion_agent._call_anthropic_api_rephrase') as mock_api:
+                mock_api.return_value = invalid_rephrase
+                suggestions = content_suggestion_agent.generate_suggestions(persist=False)
+                visual_gap = next((s for s in suggestions if s.category_id == self.cat_visual.id and s.age_band == '12-14'), None)
+                self.assertIsNotNone(visual_gap)
+                self.assertNotEqual(visual_gap.reason, invalid_rephrase)
+                self.assertIn("registered learner(s) in age band 12-14", visual_gap.reason)
 
 
 if __name__ == '__main__':

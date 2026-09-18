@@ -311,58 +311,75 @@ For demonstration, evaluation, and presentation purposes, pre-generated sample e
 
 ## 🤖 Internal System Agents & Platform Health
 
-ChildInsight incorporates an internal agent layer under `app/agent/` designed to keep the platform reliable, ethically compliant, and self-maintaining without manual administrator intervention.
+ChildInsight incorporates an internal agent layer under `app/agent/` designed to keep the platform reliable, ethically compliant, multilingual-aware, and self-maintaining without manual administrator intervention.
 
 > [!NOTE]
-> **Architecture & Transparency Disclosure**: ChildInsight's internal agents are **deterministic rule-based monitors, schema validators, and scheduled machine learning pipelines** working in coordination. They do not claim or constitute Artificial General Intelligence (AGI), autonomous self-awareness, or black-box clinical decision-making.
+> **Architecture & Transparency Disclosure**: ChildInsight's internal agents are **deterministic rule-based monitors, schema validators, multilingual content inspectors, and scheduled machine learning pipelines** working in coordination. They do not claim or constitute Artificial General Intelligence (AGI), autonomous self-awareness, or black-box clinical decision-making. Every educational suggestion and draft is strictly pending until reviewed and approved by a human administrator.
 
 ### 1. Safety & Compliance Agent (`compliance_agent.py`)
-- **What it does:** Acts as an ethical language sentinel. Scans every generated recommendation reason, notification alert, and exported report before it is saved or sent to parents and teachers.
-- **Why it matters:** PRD §4 strictly bans clinical and diagnostic terminology (such as *ADHD*, *autism*, *dyslexia*, *deficit*, *disorder*, or *IQ scores*). If any prohibited term is detected, the agent immediately blocks the text, logs the incident for administrative review, and automatically substitutes an encouraging, strengths-based educational fallback.
+- **What it does:** Acts as an ethical language sentinel. Scans generated recommendation reasons, notification alerts, exported reports, and **Hindi content translations** before anything is saved or presented to parents, teachers, or learners.
+- **Bilingual Clinical Blacklist:** PRD §4 strictly bans clinical, psychiatric, and diagnostic terminology. The agent enforces equivalent, linguistically verified blacklists across **both English and Hindi (Devanagari)**:
+  - *English:* `adhd`, `autism`, `dyslexia`, `disorder`, `syndrome`, `deficit`, `abnormal`, `impaired`, `pathology`, `iq`, `retarded`, `handicap`, `clinical`, `diagnosis`, `medical`, etc.
+  - *Hindi:* विकार (*disorder*), संलक्षण/सिंड्रोम (*syndrome*), निदान (*diagnosis*), नैदानिक (*clinical*), न्यूनता/कमी (*deficit*), असामान्य (*abnormal*), बाधित/क्षीणता (*impaired*), विकृति/रोगविज्ञान (*pathology*), बुद्धिलब्धि/आईक्यू (*IQ*), मंदबुद्धि/मानसिक मंदता (*retardation*), अक्षमता/अपंग/विकलांग (*disability/handicap*), ऑटिज्म/आत्मकेंद्रित (*autism*), डिस्लेक्सिया/पठन विकार (*dyslexia*), एडीएचडी/अतिसक्रियता (*ADHD*), डिस्कैलकुलिया/गणना विकार (*dyscalculia*), आदि।
+- **Multilingual Fallback:** If any prohibited term is detected in English or Hindi, the agent blocks the text, logs the incident, and substitutes an encouraging, strengths-based educational fallback in the appropriate language (using `DEFAULT_FALLBACK_TEXT_HI` for Devanagari text).
 - **Privacy Safeguard:** To protect learner confidentiality, raw blocked text is stored exclusively in secure server-side rotating logs—the administrator dashboard displays only matched rule categories and incident counts.
 
 ### 2. Content Integrity Agent (`content_integrity_agent.py`)
-- **What it does:** Continuously audits the educational catalog for content anomalies, including activities with zero questions, empty categories, orphaned questions, invalid difficulty levels, out-of-range age bounds (`min_age > max_age`), and duplicate questions within an activity.
-- **Why it matters:** Ensures children never encounter unplayable activities, broken questions, or inappropriate difficulty levels during their learning sessions.
+- **What it does:** Continuously audits the educational catalog for anomalies: activities with zero questions, empty categories, orphaned questions, invalid difficulty levels, out-of-range age bounds (`min_age > max_age`), duplicate questions within an activity, and **translation completeness**.
+- **Translation Completeness & Integrity:** Specifically inspects activities with Hindi translations to catch and report `incomplete_translation` issues:
+  - Activities where the title is translated into Hindi, but questions lack Hindi translations.
+  - Activities where questions have Hindi translations, but the activity title/description lacks a Hindi translation.
+  - Question answer option count mismatches between English and Hindi versions (e.g. 4 English choices vs 3 Hindi choices).
+  - Hindi questions where the declared correct answer is not present among the Hindi answer choices.
+- **Actionable Reporting:** Reports the exact database activity ID, activity title, and precise missing components so administrators can immediately address partial or broken translations.
 
 ### 3. Platform Health Agent (`health_agent.py`)
 - **What it does:** Aggregates real platform telemetry to compute an objective 0–100 overall platform health score based on session completion rates (35%), valid content coverage (35%), recommendation coverage (30%), with deductions for recent compliance incidents and content integrity issues.
 - **Why it matters:** Records snapshots in the `health_snapshots` database table so administrators can monitor health trends over time via an interactive Chart.js trend line rather than viewing an isolated static number.
 
 ### 4. Adaptive Content Suggestion Agent (`content_suggestion_agent.py`)
-- **What it does:** Analyzes aggregate learner demographics (`Child.age`), category performance, gap persistence, and engagement trends (`analytics_service.compute_category_age_band_engagement_trend`) to automatically detect educational catalog gaps:
+- **What it does:** Analyzes aggregate learner demographics (`Child.age`), preferred languages (`Child.preferred_language`), category performance, gap persistence, and engagement trends (`analytics_service.compute_category_age_band_engagement_trend`) to automatically detect educational catalog gaps:
   - **Progression Gaps:** Identifies categories where learners cluster at a difficulty level with high mastery (accuracy $\ge 70\%$), but the subsequent tier lacks activities.
   - **Age Coverage Gaps:** Identifies active age bands on the platform (4–6, 6–9, 9–12, 12–14) that have fewer than 2 activities in a category.
   - **Content Imbalance:** Identifies categories with activity counts substantially lower than the platform average.
   - **Domain Expansion:** Identifies opportunities for new educational categories when active learners demonstrate high cross-domain engagement.
-- **Rich Context & Evidence-Dense Reasoning:**
-  - **Actively Affected Children Count:** Determines the exact number of active learners impacted by the gap rather than using generic descriptions.
-  - **Gap Persistence Tracking:** Compares against previous pending suggestions to track how many scheduler cycles the gap has persisted across (`persistence_count`), updating dynamic metrics without creating duplicate rows.
-  - **Engagement Trend Analysis:** Pulls category and cohort engagement trends (`improving`, `declining`, `steady`) from `analytics_service`.
-  - **Evidence-Dense Reason Strings:** Generates transparent, data-backed reasons (e.g., *"14 children aged 9-12 are averaging 82% accuracy in Medium Logic with steady engagement, but only 1 Advanced activity available — this gap has persisted for 3 scheduler runs"*).
-- **Urgency-Based Prioritization (`priority_score`):**
-  - Computes an objective urgency score: $\text{priority\_score} = (\text{affected\_children} \times 2.0) + (\text{persistence\_count} \times 5.0) + (\text{trend\_penalty})$.
-  - Admin suggestions dashboard (`/admin/content-suggestions`) displays priority and persistence badges and automatically sorts entries by `priority_score` descending so high-impact bottlenecks surface first.
-- **Human-in-the-Loop Safeguard:** The agent **never auto-creates or auto-publishes content**. Suggestions are persisted in `content_suggestions` (`pending` status) with full educational evidence.
+  - **Translation Gaps (`translation_gap`):** Queries real counted counts of Hindi-preferring learners (`Child.preferred_language == 'hi'`) in each developmental age band and detects when their cohort has fewer than 2 translated activities in a category.
+- **Evidence-Dense Reasoning with Real Computed Counts:** Every number, count, and translation percentage reported is strictly computed directly from the database (e.g., *"2 registered learner(s) in age band 4-6 (Early Childhood / Pre-K) prefer Hindi, but category 'Logic' currently has only 0 translated Hindi activity(ies) out of 1 total activities (0% translated)"*). Zero estimates or placeholders are used.
+- **Urgency-Based Prioritization (`priority_score`):** Computes an objective urgency score: $\text{priority\_score} = (\text{affected\_children} \times 2.0) + (\text{persistence\_count} \times 5.0) + (\text{trend\_penalty})$.
+- **Strict Human-in-the-Loop Safeguard:** The agent **never auto-creates or auto-publishes content**. Suggestions are persisted in `content_suggestions` (`pending` status) with full educational evidence.
 - **Admin Review Workflow:** Administrators review suggestions at `/admin/content-suggestions` and can click **"Draft with AI →"** (opening the pre-filled AI content drafting generator), **"Create Activity →"**, or **"Create Category →"** to pre-fill standard administrative forms, automatically marking the suggestion as `approved` upon publication, or **"Dismiss"** suggestions with zero action taken.
 
 ### 5. AI-Assisted Content Drafting Agent (`content_draft_agent.py`)
 - **What it does:** Generates high-quality, research-grounded educational activity drafts for administrators using rich platform context:
   - **Category Style Grounding:** Analyzes existing activities in the target category as tone and question style benchmarks.
   - **Age-Band Calibration:** Inspects cross-category activities across all 5 cognitive domains for the target developmental cohort (4–6, 6–9, 9–12, 12–14) to match established vocabulary complexity and cognitive load.
-  - **Curriculum Gap Targeting:** Directly incorporates data-backed gap detection reasoning from linked Content Suggestions so drafts solve genuine platform shortages rather than generic topics.
-  - **Dual-Layer Ethical Compliance:** Passes PRD §4 clinical/diagnostic blacklist terms (`adhd`, `autism`, `deficit`, `disorder`, `iq`, etc.) as explicit negative generation constraints in the prompt, and subsequently validates every generated question through `compliance_agent.check_text()`, retrying up to 2 times and discarding any question that fails before human presentation.
-- **Strict Human-in-the-Loop Boundary:** The agent **never auto-publishes or writes directly to the database**. This boundary does not change no matter how much platform context the agent has access to. All generated drafts are presented in an editable review screen (`/admin/activities/ai-draft/generate`) displaying transparent grounding metadata ("Matched tone from...", "Calibrated against...", "Addressing gap..."). Content is only committed to the database when an administrator explicitly clicks **"Approve & Publish"**, while clicking **"Discard"** throws the draft away.
+  - **Curriculum Gap Targeting:** Directly incorporates data-backed gap detection reasoning from linked Content Suggestions so drafts solve genuine platform shortages.
+  - **Dual-Language Generation for Translation Gaps:** When addressing a `translation_gap`, the agent generates **both English and Hindi versions together** (paired titles, descriptions, 5–6 multiple-choice questions with 4 options each, correct answers, and scaffolding hints) in a single unified draft.
+  - **Bilingual Ethical Compliance Verification:** Applies both English and Hindi negative constraints in the generation prompt and validates all generated English and Hindi question prompts, options, answers, and hints through `compliance_agent.check_text()`, retrying up to 2 times and discarding non-compliant items before presenting to the administrator.
+- **Strict Human-in-the-Loop Boundary:** The agent **never auto-publishes or writes directly to the database**. All generated drafts are presented in an editable review screen (`/admin/activities/ai-draft/generate`) displaying transparent grounding metadata and side-by-side editable fields for English and Hindi. Content is only committed to the database when an administrator explicitly clicks **"Approve & Publish"**, simultaneously storing both language versions in `translations_json`, while clicking **"Discard"** immediately throws the draft away.
 
 ### 6. Background Maintenance Runner (`scheduler.py`)
 - **What it does:** An idempotent, fault-isolated pipeline runner (callable via CLI with `python -m flask run-agents` or triggered from the Admin Console) that systematically:
-  1. Refreshes category progress aggregations for active learners.
+  1. Records a timestamped platform health snapshot.
   2. Refits the Scikit-learn K-Means interaction clustering model when new session data is available.
   3. Regenerates personalized activity recommendations for learners who completed new sessions.
-  4. Runs content integrity and compliance validation sweeps.
-  5. Executes the Adaptive Content Suggestion Agent to identify curriculum opportunities.
-  6. Records a timestamped platform health snapshot.
+  4. Runs content integrity and compliance validation sweeps (including translation completeness).
+  5. Executes the Adaptive Content Suggestion Agent to identify curriculum and translation opportunities.
+  6. Dispatches notifications to platform administrators.
+  7. Consolidates cross-agent telemetry into prioritized action items via the Orchestrator Agent.
 - **Why it matters:** Features concurrency locking to prevent overlapping executions and wraps each step in independent exception handling so that an issue in one task never halts the rest of the maintenance cycle.
+
+### 7. Read-Only Action Orchestrator Agent (`orchestrator_agent.py`)
+- **What it does:** Serves as a strictly read-only coordinator that pulls together the findings of all other system agents into a single, deduplicated, prioritized action list for administrators:
+  - **Cross-Agent Consolidation in One Pass:** Reads all pending `content_suggestions` (including `translation_gap` opportunities), active `content_integrity_agent` catalog issues, the latest `health_agent` score and per-age-band breakdown, and 24-hour `compliance_agent` telemetry.
+  - **Deduplication & Cohort Grouping:** Consolidates related findings so administrators are not overwhelmed by redundant alerts. For example, multiple progression or translation suggestions for the same category across different developmental bands become a single grouped item displaying `"affects ages 4-6, 9-12, 12-14"` with aggregated affected learner counts and persistence metrics.
+  - **Objective Priority Tiering:** Assigns transparent priority tiers (`Critical`, `Important`, `Minor`) using deterministic rules based on real computed numbers:
+    - *Critical (Red):* Active compliance incidents in the past 24 hours, overall platform health $< 60$, any cohort health $< 70$, or urgent curriculum gaps affecting $\ge 10$ children, persisting $\ge 3$ runs, or having a priority score $\ge 25$.
+    - *Important (Amber):* Content integrity issues (empty categories, missing questions, translation completeness mismatches), moderate curriculum or translation gaps (score $\ge 10$, affected children $> 0$, or `translation_gap`).
+    - *Minor (Gray):* General catalog expansion ideas with no immediate affected children or low urgency.
+  - **Grounded, Plain-Language Summaries:** Every summary explains clearly *what* the issue is and *why* it matters, directly citing the underlying telemetry numbers (e.g. *"7 child(ren) (affects ages 6-9) affected by curriculum gap in Language (urgency score 19.0, persisted 2 run(s)). Addressing this prevents learning stalls."*).
+  - **Zero Autonomous Mutations:** The orchestrator never creates, modifies, publishes, or deletes any activity, question, or database record. It functions exclusively as an organizational lens.
+  - **Interactive Action Center:** Accessible at `/admin/agents` (and `/admin/action-center`), featuring direct deep links to existing resolution pages (e.g. `/admin/activities/ai-draft/generate`, `/admin/content-suggestions`, `/admin/activities/integrity-check`) and a session-based **"Dismiss from this view"** toggle that declutters the admin's workspace without touching or deleting any database records.
 
 ---
 
