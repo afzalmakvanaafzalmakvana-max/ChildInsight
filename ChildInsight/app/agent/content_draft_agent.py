@@ -802,7 +802,9 @@ def verify_and_clean_questions(
                 logger.warning(f"Discarded question {idx+1} after failing 2 compliance retries.")
                 discarded_count += 1
 
-    return cleaned_en_questions, cleaned_hi_questions, discarded_count
+    if raw_hi_questions is not None:
+        return cleaned_en_questions, cleaned_hi_questions, discarded_count
+    return cleaned_en_questions, discarded_count
 
 
 # =============================================================================
@@ -880,9 +882,15 @@ def generate_draft_activity(
 
     # Verify and clean questions with compliance check & retry loop
     raw_questions = raw_draft.get('questions', [])
-    clean_questions, clean_hi_questions, discarded_count = verify_and_clean_questions(
-        raw_questions, category_name, band_key, raw_hi_questions=raw_hi_questions
-    )
+    if is_translation_gap or raw_hi:
+        clean_questions, clean_hi_questions, discarded_count = verify_and_clean_questions(
+            raw_questions, category_name, band_key, raw_hi_questions=raw_hi_questions
+        )
+    else:
+        clean_questions, discarded_count = verify_and_clean_questions(
+            raw_questions, category_name, band_key
+        )
+        clean_hi_questions = []
 
     # Clean Hindi title and description if dual-language
     final_translations = None
