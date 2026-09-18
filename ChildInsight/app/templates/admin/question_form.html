@@ -83,6 +83,54 @@
             </small>
         </div>
 
+        <!-- Hindi Translation Section (Optional) -->
+        <div style="background: rgba(109, 40, 217, 0.04); border: 1px dashed #A78BFA; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.75rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                <h4 style="margin: 0; font-size: 0.95rem; color: #6D28D9; display: flex; align-items: center; gap: 0.4rem;">
+                    <span>🌐 Hindi Translation</span>
+                </h4>
+                <span class="badge badge-purple" style="font-size: 0.75rem;">Hindi (optional — can be added later)</span>
+            </div>
+            <p style="font-size: 0.82rem; color: var(--color-text-muted); margin: 0 0 1rem;">
+                Optional Hindi question prompt, choices, correct answer, and hint.
+            </p>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+                {{ form.question_text_hi.label(class="form-label") }}
+                {{ form.question_text_hi(class="form-control" + (" is-invalid" if form.question_text_hi.errors else ""), rows="3", placeholder="उदा. इस पैटर्न में अगला कौन सा आकार आएगा? 🔴 🔵 🔴 🔵 ...") }}
+                {% for error in form.question_text_hi.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+                {{ form.options_hi.label(class="form-label") }}
+                {{ form.options_hi(class="form-control" + (" is-invalid" if form.options_hi.errors else ""), rows="4", placeholder="विकल्प क\nविकल्प ख\nविकल्प ग\nविकल्प घ") }}
+                {% for error in form.options_hi.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+                <small style="display: block; color: var(--color-text-muted); margin-top: 0.25rem;">
+                    Enter each Hindi choice on its own separate line matching the order of the English choices.
+                </small>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1.25rem;">
+                {{ form.correct_answer_hi.label(class="form-label") }}
+                {{ form.correct_answer_hi(class="form-control" + (" is-invalid" if form.correct_answer_hi.errors else ""), placeholder="Must match one of the Hindi choices above") }}
+                {% for error in form.correct_answer_hi.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                {{ form.hint_hi.label(class="form-label") }}
+                {{ form.hint_hi(class="form-control" + (" is-invalid" if form.hint_hi.errors else ""), placeholder="उदा. बारी-बारी से बदलते रंगों को ध्यान से देखें!") }}
+                {% for error in form.hint_hi.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+            </div>
+        </div>
+
         <div style="display: flex; gap: 0.75rem; align-items: center;">
             {{ form.submit(class="btn btn-primary") }}
             <a href="{{ url_for('admin.activity_questions', activity_id=activity.id) }}" class="btn btn-outline">Cancel</a>

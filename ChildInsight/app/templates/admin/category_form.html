@@ -45,12 +45,41 @@
             </small>
         </div>
 
-        <div class="form-group" style="margin-bottom: 2rem;">
+        <div class="form-group" style="margin-bottom: 1.5rem;">
             {{ form.description.label(class="form-label") }}
             {{ form.description(class="form-control" + (" is-invalid" if form.description.errors else ""), rows="4", placeholder="Explain the cognitive skills and learning objectives covered by activities in this domain...") }}
             {% for error in form.description.errors %}
                 <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
             {% endfor %}
+        </div>
+
+        <!-- Hindi Translation Section (Optional) -->
+        <div style="background: rgba(109, 40, 217, 0.04); border: 1px dashed #A78BFA; border-radius: 8px; padding: 1.25rem; margin-bottom: 2rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                <h4 style="margin: 0; font-size: 0.95rem; color: #6D28D9; display: flex; align-items: center; gap: 0.4rem;">
+                    <span>🌐 Hindi Translation</span>
+                </h4>
+                <span class="badge badge-purple" style="font-size: 0.75rem;">Hindi (optional — can be added later)</span>
+            </div>
+            <p style="font-size: 0.82rem; color: var(--color-text-muted); margin: 0 0 1rem;">
+                If provided, Hindi-speaking children will see these localized details in the activity hub and picker.
+            </p>
+
+            <div class="form-group" style="margin-bottom: 1rem;">
+                {{ form.name_hi.label(class="form-label") }}
+                {{ form.name_hi(class="form-control" + (" is-invalid" if form.name_hi.errors else ""), placeholder="उदा. विज्ञान और खोज, रचनात्मक कला...") }}
+                {% for error in form.name_hi.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                {{ form.description_hi.label(class="form-label") }}
+                {{ form.description_hi(class="form-control" + (" is-invalid" if form.description_hi.errors else ""), rows="3", placeholder="इस श्रेणी में गतिविधियों द्वारा विकसित संज्ञानात्मक कौशल का विवरण...") }}
+                {% for error in form.description_hi.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+            </div>
         </div>
 
         {% if is_edit and category %}

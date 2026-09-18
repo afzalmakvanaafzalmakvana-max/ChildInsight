@@ -142,56 +142,37 @@ def build_generation_prompt(
     matched_tone_titles = [a['title'] for a in cat_context['reference_activities']]
     calibration_titles = [f"{a['title']} ({a['category_name']}, {a['difficulty']})" for a in calibration_context[:5]]
 
-    if is_translation_gap:
-        output_format_instructions = (
-            "OUTPUT FORMAT (DUAL-LANGUAGE DRAFT REQUIRED):\n"
-            "You must respond ONLY with a valid JSON object matching this structure containing BOTH English and Hindi versions:\n"
-            "{\n"
-            '  "title": "Activity Title (English, playful, engaging)",\n'
-            '  "description": "Short 1-2 sentence description in English.",\n'
-            '  "estimated_duration": 8,\n'
-            '  "questions": [\n'
-            '    {\n'
-            '      "question_text": "Engaging question text in English",\n'
-            '      "options": ["Option A", "Option B", "Option C", "Option D"],\n'
-            '      "correct_answer": "Option A",\n'
-            '      "hint": "Gentle, supportive clue in English."\n'
-            '    }\n'
-            '  ],\n'
-            '  "translations": {\n'
-            '    "hi": {\n'
-            '      "title": "हिंदी शीर्षक (Playful Hindi Title)",\n'
-            '      "description": "हिंदी विवरण (Short 1-2 sentence description in Hindi)",\n'
-            '      "questions": [\n'
-            '        {\n'
-            '          "question_text": "हिंदी प्रश्न (Engaging Hindi question prompt)",\n'
-            '          "options": ["विकल्प क", "विकल्प ख", "विकल्प ग", "विकल्प घ"],\n'
-            '          "correct_answer": "विकल्प क",\n'
-            '          "hint": "सहायक संकेत (Scaffolding clue in Hindi)"\n'
-            '        }\n'
-            '      ]\n'
-            '    }\n'
-            '  }\n'
-            "}"
-        )
-    else:
-        output_format_instructions = (
-            "OUTPUT FORMAT:\n"
-            "You must respond ONLY with a valid JSON object matching this structure (no markdown formatting or wrapping outside JSON):\n"
-            "{\n"
-            '  "title": "Activity Title (playful, engaging)",\n'
-            '  "description": "Short 1-2 sentence description setting up the playful scenario.",\n'
-            '  "estimated_duration": 8,\n'
-            '  "questions": [\n'
-            '    {\n'
-            '      "question_text": "Engaging question text suitable for the age band",\n'
-            '      "options": ["Option A", "Option B", "Option C", "Option D"],\n'
-            '      "correct_answer": "Option A",\n'
-            '      "hint": "Gentle, supportive clue that scaffolds understanding."\n'
-            '    }\n'
-            '  ]\n'
-            "}"
-        )
+    output_format_instructions = (
+        "OUTPUT FORMAT (DUAL-LANGUAGE DRAFT REQUIRED):\n"
+        "You must respond ONLY with a valid JSON object matching this structure containing BOTH English and Hindi versions:\n"
+        "{\n"
+        '  "title": "Activity Title (English, playful, engaging)",\n'
+        '  "description": "Short 1-2 sentence description in English.",\n'
+        '  "estimated_duration": 8,\n'
+        '  "questions": [\n'
+        '    {\n'
+        '      "question_text": "Engaging question text in English",\n'
+        '      "options": ["Option A", "Option B", "Option C", "Option D"],\n'
+        '      "correct_answer": "Option A",\n'
+        '      "hint": "Gentle, supportive clue in English."\n'
+        '    }\n'
+        '  ],\n'
+        '  "translations": {\n'
+        '    "hi": {\n'
+        '      "title": "हिंदी शीर्षक (Playful Hindi Title)",\n'
+        '      "description": "हिंदी विवरण (Short 1-2 sentence description in Hindi)",\n'
+        '      "questions": [\n'
+        '        {\n'
+        '          "question_text": "हिंदी प्रश्न (Engaging Hindi question prompt)",\n'
+        '          "options": ["विकल्प क", "विकल्प ख", "विकल्प ग", "विकल्प घ"],\n'
+        '          "correct_answer": "विकल्प क",\n'
+        '          "hint": "सहायक संकेत (Scaffolding clue in Hindi)"\n'
+        '        }\n'
+        '      ]\n'
+        '    }\n'
+        '  }\n'
+        "}"
+    )
 
     system_prompt = (
         "You are an expert pedagogical content designer for 'ChildInsight', an intelligent "
@@ -320,13 +301,13 @@ def _generate_grounded_fallback(
     difficulty: str,
     suggestion_context: dict = None,
     custom_guidance: str = None,
-    is_translation_gap: bool = False
+    is_translation_gap: bool = True
 ) -> dict:
     """
     High-quality, platform-grounded fallback generator used when ANTHROPIC_API_KEY
     is not set or in offline/test environments.
     Strictly follows PRD §4 non-diagnostic tone and age calibration.
-    When is_translation_gap is True, provides paired Hindi content.
+    Provides paired Hindi and English content as platform default.
     """
     band_info = AGE_BANDS.get(age_band_key, AGE_BANDS['6-9'])
     min_age = band_info['min_age']
@@ -646,27 +627,26 @@ def _generate_grounded_fallback(
         "questions": questions
     }
 
-    if is_translation_gap:
-        category_names_hi = {
-            'Visual Learning': 'दृश्य अधिगम',
-            'Logic': 'तर्क शक्ति',
-            'Numbers': 'संख्या ज्ञान',
-            'Language': 'भाषा ज्ञान',
-            'Memory': 'स्मृति अभ्यास'
+    category_names_hi = {
+        'Visual Learning': 'दृश्य अधिगम',
+        'Logic': 'तर्क शक्ति',
+        'Numbers': 'संख्या ज्ञान',
+        'Language': 'भाषा ज्ञान',
+        'Memory': 'स्मृति अभ्यास'
+    }
+    hi_cat = category_names_hi.get(category_name, 'रोमांचक')
+    hi_title = f"{hi_cat} खोज यात्रा ({difficulty})"
+    hi_description = (
+        f"{min_age}-{max_age} वर्ष के बच्चों के लिए {hi_cat} सीखने की गतिविधि। "
+        "पहेलियाँ सुलझाएँ और नए बैज प्राप्त करें!"
+    )
+    result["translations"] = {
+        "hi": {
+            "title": hi_title,
+            "description": hi_description,
+            "questions": hi_questions
         }
-        hi_cat = category_names_hi.get(category_name, 'रोमांचक')
-        hi_title = f"{hi_cat} खोज यात्रा ({difficulty})"
-        hi_description = (
-            f"{min_age}-{max_age} वर्ष के बच्चों के लिए {hi_cat} सीखने की गतिविधि। "
-            "पहेलियाँ सुलझाएँ और नए बैज प्राप्त करें!"
-        )
-        result["translations"] = {
-            "hi": {
-                "title": hi_title,
-                "description": hi_description,
-                "questions": hi_questions
-            }
-        }
+    }
 
     return result
 
@@ -861,7 +841,7 @@ def generate_draft_activity(
             difficulty=difficulty,
             suggestion_context=sugg_context,
             custom_guidance=custom_guidance,
-            is_translation_gap=is_translation_gap
+            is_translation_gap=True
         )
 
     # Clean English title and description with compliance check
@@ -882,52 +862,45 @@ def generate_draft_activity(
 
     # Verify and clean questions with compliance check & retry loop
     raw_questions = raw_draft.get('questions', [])
-    if is_translation_gap or raw_hi:
-        clean_questions, clean_hi_questions, discarded_count = verify_and_clean_questions(
-            raw_questions, category_name, band_key, raw_hi_questions=raw_hi_questions
-        )
-    else:
-        clean_questions, discarded_count = verify_and_clean_questions(
-            raw_questions, category_name, band_key
-        )
-        clean_hi_questions = []
+    clean_questions, clean_hi_questions, discarded_count = verify_and_clean_questions(
+        raw_questions, category_name, band_key, raw_hi_questions=raw_hi_questions
+    )
 
-    # Clean Hindi title and description if dual-language
+    # Clean Hindi title and description (default dual-language)
     final_translations = None
     has_hindi = False
 
-    if is_translation_gap or raw_hi:
-        hi_title = raw_hi.get('title', '').strip() if isinstance(raw_hi, dict) else ''
-        if not hi_title:
-            category_names_hi = {
-                'Visual Learning': 'दृश्य अधिगम',
-                'Logic': 'तर्क शक्ति',
-                'Numbers': 'संख्या ज्ञान',
-                'Language': 'भाषा ज्ञान',
-                'Memory': 'स्मृति अभ्यास'
-            }
-            hi_title = f"{category_names_hi.get(category_name, 'रोमांचक')} खोज यात्रा ({difficulty})"
-
-        is_hi_title_safe, _ = compliance_agent.check_text(hi_title)
-        if not is_hi_title_safe:
-            hi_title = "रोमांचक खोज यात्रा"
-
-        hi_desc = raw_hi.get('description', '').strip() if isinstance(raw_hi, dict) else ''
-        if not hi_desc:
-            hi_desc = f"{band_info['min_age']}-{band_info['max_age']} वर्ष के बच्चों के लिए सीखने की मजेदार गतिविधि।"
-
-        is_hi_desc_safe, _ = compliance_agent.check_text(hi_desc)
-        if not is_hi_desc_safe:
-            hi_desc = "सीखने और नए कौशल विकसित करने की मजेदार गतिविधि।"
-
-        final_translations = {
-            'hi': {
-                'title': hi_title,
-                'description': hi_desc,
-                'questions': clean_hi_questions
-            }
+    hi_title = raw_hi.get('title', '').strip() if isinstance(raw_hi, dict) else ''
+    if not hi_title:
+        category_names_hi = {
+            'Visual Learning': 'दृश्य अधिगम',
+            'Logic': 'तर्क शक्ति',
+            'Numbers': 'संख्या ज्ञान',
+            'Language': 'भाषा ज्ञान',
+            'Memory': 'स्मृति अभ्यास'
         }
-        has_hindi = True
+        hi_title = f"{category_names_hi.get(category_name, 'रोमांचक')} खोज यात्रा ({difficulty})"
+
+    is_hi_title_safe, _ = compliance_agent.check_text(hi_title)
+    if not is_hi_title_safe:
+        hi_title = "रोमांचक खोज यात्रा"
+
+    hi_desc = raw_hi.get('description', '').strip() if isinstance(raw_hi, dict) else ''
+    if not hi_desc:
+        hi_desc = f"{band_info['min_age']}-{band_info['max_age']} वर्ष के बच्चों के लिए सीखने की मजेदार गतिविधि।"
+
+    is_hi_desc_safe, _ = compliance_agent.check_text(hi_desc)
+    if not is_hi_desc_safe:
+        hi_desc = "सीखने और नए कौशल विकसित करने की मजेदार गतिविधि।"
+
+    final_translations = {
+        'hi': {
+            'title': hi_title,
+            'description': hi_desc,
+            'questions': clean_hi_questions
+        }
+    }
+    has_hindi = True
 
     platform_context_meta['discarded_questions_count'] = discarded_count
     platform_context_meta['prompt_preview'] = {

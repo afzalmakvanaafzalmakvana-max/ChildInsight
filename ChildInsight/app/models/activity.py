@@ -12,12 +12,47 @@ class Category(db.Model):
     slug = db.Column(db.String(100), unique=True, nullable=False)
     icon = db.Column(db.String(50), nullable=True)
     description = db.Column(db.Text, nullable=True)
+    translations_json = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     activities = db.relationship('Activity', backref='category', lazy='dynamic', cascade='all, delete-orphan')
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    @property
+    def translations(self) -> dict:
+        if not self.translations_json:
+            return {}
+        try:
+            return json.loads(self.translations_json)
+        except Exception:
+            return {}
+
+    def get_name(self, lang: str = 'en') -> str:
+        if lang == 'en' or not lang:
+            return self.name
+        hi_name = self.translations.get(lang, {}).get('name')
+        if hi_name:
+            return hi_name
+        try:
+            from app.translations import t
+            return t(self.slug, default=self.name, lang=lang)
+        except Exception:
+            return self.name
+
+    def get_description(self, lang: str = 'en') -> str:
+        if lang == 'en' or not lang:
+            return self.description or ''
+        hi_desc = self.translations.get(lang, {}).get('description')
+        if hi_desc:
+            return hi_desc
+        return self.description or ''
+
+    def has_translation(self, lang: str = 'en') -> bool:
+        if lang == 'en':
+            return True
+        return bool(self.translations.get(lang, {}).get('name'))
 
     def __repr__(self) -> str:
         return f'<Category id={self.id} name={self.name}>'
@@ -151,6 +186,10 @@ class ActivityQuestion(db.Model):
             if val:
                 return val
         return self.question_text
+
+    def get_prompt(self, lang: str = 'en') -> str:
+        """Convenience alias for get_question_text."""
+        return self.get_question_text(lang)
 
     def get_hint(self, lang: str = 'en') -> str | None:
         from app.translations import normalize_language

@@ -83,6 +83,35 @@
             {% endfor %}
         </div>
 
+        <!-- Hindi Translation Section (Optional) -->
+        <div style="background: rgba(109, 40, 217, 0.04); border: 1px dashed #A78BFA; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.75rem;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                <h4 style="margin: 0; font-size: 0.95rem; color: #6D28D9; display: flex; align-items: center; gap: 0.4rem;">
+                    <span>🌐 Hindi Translation</span>
+                </h4>
+                <span class="badge badge-purple" style="font-size: 0.75rem;">Hindi (optional — can be added later)</span>
+            </div>
+            <p style="font-size: 0.82rem; color: var(--color-text-muted); margin: 0 0 1rem;">
+                Provide Hindi titles and descriptions. If left blank, this activity will be created as English-only and flagged for follow-up translation.
+            </p>
+
+            <div class="form-group" style="margin-bottom: 1rem;">
+                {{ form.title_hi.label(class="form-label") }}
+                {{ form.title_hi(class="form-control" + (" is-invalid" if form.title_hi.errors else ""), placeholder="उदा. पैटर्न सफारी, संख्या ग्रिड जासूस...") }}
+                {% for error in form.title_hi.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                {{ form.description_hi.label(class="form-label") }}
+                {{ form.description_hi(class="form-control" + (" is-invalid" if form.description_hi.errors else ""), rows="3", placeholder="बच्चे के लिए चुनौती या खेल-आधारित परिदृश्य का संक्षिप्त हिंदी विवरण...") }}
+                {% for error in form.description_hi.errors %}
+                    <div class="form-error" style="color: var(--color-danger); font-size: 0.85rem; margin-top: 0.35rem;">{{ error }}</div>
+                {% endfor %}
+            </div>
+        </div>
+
         <div class="form-group" style="margin-bottom: 1.75rem;">
             <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                 {{ form.is_active() }}

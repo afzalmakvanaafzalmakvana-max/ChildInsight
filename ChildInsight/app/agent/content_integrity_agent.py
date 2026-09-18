@@ -201,6 +201,20 @@ def run_audit() -> list:
                         ),
                         'suggested_fix': f"Update Hindi options to include '{hi_correct}' as a selectable choice."
                     })
+        else:
+            # Case D: Activity is English-only (completely missing Hindi translations)
+            issues.append({
+                'issue_type': 'incomplete_translation',
+                'severity': 'medium',
+                'affected_record': f"Activity: {act.title} (ID: {act.id})",
+                'record_type': 'activity',
+                'record_id': act.id,
+                'activity_id': act.id,
+                'description': (
+                    f"Activity #{act.id} ('{act.title}') is English-only and lacks Hindi translations for its title, description, and questions."
+                ),
+                'suggested_fix': "Provide Hindi translations for this activity and its questions to ensure bilingual content coverage."
+            })
 
     return issues
 

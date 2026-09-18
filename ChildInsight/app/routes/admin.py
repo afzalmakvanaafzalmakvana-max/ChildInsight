@@ -14,6 +14,7 @@ from app.models.audit_log import AuditLog
 from app.models.content_suggestion import ContentSuggestion
 from app.forms.admin import AssignTeacherForm, ChangeRoleForm, CategoryForm, ActivityForm, QuestionForm
 from app.services import audit_service
+from app.agent import compliance_agent
 from app.utils.decorators import role_required
 
 admin_bp = Blueprint('admin', __name__)
@@ -311,6 +312,10 @@ def category_create():
             form.description.data = request.args.get('description')
         if request.args.get('icon'):
             form.icon.data = request.args.get('icon')
+        if request.args.get('name_hi'):
+            form.name_hi.data = request.args.get('name_hi')
+        if request.args.get('description_hi'):
+            form.description_hi.data = request.args.get('description_hi')
 
     if form.validate_on_submit():
         name = form.name.data.strip()
@@ -319,12 +324,49 @@ def category_create():
             flash(f"A category named '{name}' already exists.", "danger")
             return render_template('admin/category_form.html', form=form, title="Add Category", is_edit=False)
 
+        # Compliance checks
+        safe, reason = compliance_agent.check_text(name)
+        if not safe:
+            flash(f"Category name violates compliance: {reason}", "danger")
+            return render_template('admin/category_form.html', form=form, title="Add Category", is_edit=False)
+
+        if form.description.data:
+            safe, reason = compliance_agent.check_text(form.description.data)
+            if not safe:
+                flash(f"Category description violates compliance: {reason}", "danger")
+                return render_template('admin/category_form.html', form=form, title="Add Category", is_edit=False)
+
+        hi_name = form.name_hi.data.strip() if form.name_hi.data else ''
+        hi_desc = form.description_hi.data.strip() if form.description_hi.data else ''
+
+        if hi_name:
+            safe, reason = compliance_agent.check_text(hi_name)
+            if not safe:
+                flash(f"Hindi category name violates compliance: {reason}", "danger")
+                return render_template('admin/category_form.html', form=form, title="Add Category", is_edit=False)
+
+        if hi_desc:
+            safe, reason = compliance_agent.check_text(hi_desc)
+            if not safe:
+                flash(f"Hindi category description violates compliance: {reason}", "danger")
+                return render_template('admin/category_form.html', form=form, title="Add Category", is_edit=False)
+
+        cat_trans_json = None
+        if hi_name or hi_desc:
+            hi_dict = {}
+            if hi_name:
+                hi_dict['name'] = hi_name
+            if hi_desc:
+                hi_dict['description'] = hi_desc
+            cat_trans_json = json.dumps({'hi': hi_dict}, ensure_ascii=False)
+
         slug = generate_unique_category_slug(name)
         category = Category(
             name=name,
             slug=slug,
             icon=form.icon.data.strip() if form.icon.data else '📂',
-            description=form.description.data.strip() if form.description.data else None
+            description=form.description.data.strip() if form.description.data else None,
+            translations_json=cat_trans_json
         )
         db.session.add(category)
         db.session.commit()
@@ -353,13 +395,18 @@ def category_create():
 @login_required
 @role_required('admin')
 def category_edit(category_id):
-    """Edit an existing activity category's name, description, and icon."""
+    """Edit an existing activity category's name, description, icon, and translations."""
     category = db.session.get(Category, category_id)
     if not category:
         flash("Category not found.", "danger")
         return redirect(url_for('admin.categories_list'))
 
     form = CategoryForm(obj=category)
+    if request.method == 'GET':
+        hi_trans = category.translations.get('hi', {})
+        form.name_hi.data = hi_trans.get('name', '')
+        form.description_hi.data = hi_trans.get('description', '')
+
     if form.validate_on_submit():
         new_name = form.name.data.strip()
         existing = Category.query.filter(Category.name.ilike(new_name), Category.id != category.id).first()
@@ -367,10 +414,47 @@ def category_edit(category_id):
             flash(f"Another category named '{new_name}' already exists.", "danger")
             return render_template('admin/category_form.html', form=form, title="Edit Category", is_edit=True, category=category)
 
+        # Compliance checks
+        safe, reason = compliance_agent.check_text(new_name)
+        if not safe:
+            flash(f"Category name violates compliance: {reason}", "danger")
+            return render_template('admin/category_form.html', form=form, title="Edit Category", is_edit=True, category=category)
+
+        if form.description.data:
+            safe, reason = compliance_agent.check_text(form.description.data)
+            if not safe:
+                flash(f"Category description violates compliance: {reason}", "danger")
+                return render_template('admin/category_form.html', form=form, title="Edit Category", is_edit=True, category=category)
+
+        hi_name = form.name_hi.data.strip() if form.name_hi.data else ''
+        hi_desc = form.description_hi.data.strip() if form.description_hi.data else ''
+
+        if hi_name:
+            safe, reason = compliance_agent.check_text(hi_name)
+            if not safe:
+                flash(f"Hindi category name violates compliance: {reason}", "danger")
+                return render_template('admin/category_form.html', form=form, title="Edit Category", is_edit=True, category=category)
+
+        if hi_desc:
+            safe, reason = compliance_agent.check_text(hi_desc)
+            if not safe:
+                flash(f"Hindi category description violates compliance: {reason}", "danger")
+                return render_template('admin/category_form.html', form=form, title="Edit Category", is_edit=True, category=category)
+
+        cat_trans_json = None
+        if hi_name or hi_desc:
+            hi_dict = {}
+            if hi_name:
+                hi_dict['name'] = hi_name
+            if hi_desc:
+                hi_dict['description'] = hi_desc
+            cat_trans_json = json.dumps({'hi': hi_dict}, ensure_ascii=False)
+
         category.name = new_name
         category.slug = generate_unique_category_slug(new_name, existing_id=category.id)
         category.icon = form.icon.data.strip() if form.icon.data else '📂'
         category.description = form.description.data.strip() if form.description.data else None
+        category.translations_json = cat_trans_json
         db.session.commit()
 
         audit_service.log_action(
@@ -491,20 +575,62 @@ def activity_create():
                     form.max_age.data = int(parts[1])
                 except (ValueError, IndexError):
                     pass
+        if request.args.get('title_hi'):
+            form.title_hi.data = request.args.get('title_hi')
+        if request.args.get('description_hi'):
+            form.description_hi.data = request.args.get('description_hi')
 
     if form.validate_on_submit():
         if form.min_age.data > form.max_age.data:
             flash("Minimum target age cannot be greater than maximum target age.", "danger")
             return render_template('admin/activity_form.html', form=form, title="Add Activity", is_edit=False)
 
+        # Compliance checks
+        title = form.title.data.strip()
+        safe, reason = compliance_agent.check_text(title)
+        if not safe:
+            flash(f"Activity title violates compliance: {reason}", "danger")
+            return render_template('admin/activity_form.html', form=form, title="Add Activity", is_edit=False)
+
+        if form.description.data:
+            safe, reason = compliance_agent.check_text(form.description.data)
+            if not safe:
+                flash(f"Activity description violates compliance: {reason}", "danger")
+                return render_template('admin/activity_form.html', form=form, title="Add Activity", is_edit=False)
+
+        hi_title = form.title_hi.data.strip() if form.title_hi.data else ''
+        hi_desc = form.description_hi.data.strip() if form.description_hi.data else ''
+
+        if hi_title:
+            safe, reason = compliance_agent.check_text(hi_title)
+            if not safe:
+                flash(f"Hindi activity title violates compliance: {reason}", "danger")
+                return render_template('admin/activity_form.html', form=form, title="Add Activity", is_edit=False)
+
+        if hi_desc:
+            safe, reason = compliance_agent.check_text(hi_desc)
+            if not safe:
+                flash(f"Hindi activity description violates compliance: {reason}", "danger")
+                return render_template('admin/activity_form.html', form=form, title="Add Activity", is_edit=False)
+
+        act_trans_json = None
+        if hi_title or hi_desc:
+            hi_dict = {}
+            if hi_title:
+                hi_dict['title'] = hi_title
+            if hi_desc:
+                hi_dict['description'] = hi_desc
+            act_trans_json = json.dumps({'hi': hi_dict}, ensure_ascii=False)
+
         activity = Activity(
             category_id=form.category_id.data,
-            title=form.title.data.strip(),
+            title=title,
             description=form.description.data.strip() if form.description.data else None,
             difficulty=form.difficulty.data,
             estimated_duration=form.estimated_duration.data,
             min_age=form.min_age.data,
             max_age=form.max_age.data,
+            translations_json=act_trans_json,
             is_active=form.is_active.data,
             is_demo=False
         )
@@ -545,18 +671,61 @@ def activity_edit(activity_id):
     categories = Category.query.order_by(Category.name.asc()).all()
     form.category_id.choices = [(c.id, c.name) for c in categories]
 
+    if request.method == 'GET':
+        hi_trans = activity.translations.get('hi', {})
+        form.title_hi.data = hi_trans.get('title', '')
+        form.description_hi.data = hi_trans.get('description', '')
+
     if form.validate_on_submit():
         if form.min_age.data > form.max_age.data:
             flash("Minimum target age cannot be greater than maximum target age.", "danger")
             return render_template('admin/activity_form.html', form=form, title="Edit Activity", is_edit=True, activity=activity)
 
-        activity.title = form.title.data.strip()
+        # Compliance checks
+        title = form.title.data.strip()
+        safe, reason = compliance_agent.check_text(title)
+        if not safe:
+            flash(f"Activity title violates compliance: {reason}", "danger")
+            return render_template('admin/activity_form.html', form=form, title="Edit Activity", is_edit=True, activity=activity)
+
+        if form.description.data:
+            safe, reason = compliance_agent.check_text(form.description.data)
+            if not safe:
+                flash(f"Activity description violates compliance: {reason}", "danger")
+                return render_template('admin/activity_form.html', form=form, title="Edit Activity", is_edit=True, activity=activity)
+
+        hi_title = form.title_hi.data.strip() if form.title_hi.data else ''
+        hi_desc = form.description_hi.data.strip() if form.description_hi.data else ''
+
+        if hi_title:
+            safe, reason = compliance_agent.check_text(hi_title)
+            if not safe:
+                flash(f"Hindi activity title violates compliance: {reason}", "danger")
+                return render_template('admin/activity_form.html', form=form, title="Edit Activity", is_edit=True, activity=activity)
+
+        if hi_desc:
+            safe, reason = compliance_agent.check_text(hi_desc)
+            if not safe:
+                flash(f"Hindi activity description violates compliance: {reason}", "danger")
+                return render_template('admin/activity_form.html', form=form, title="Edit Activity", is_edit=True, activity=activity)
+
+        act_trans_json = None
+        if hi_title or hi_desc:
+            hi_dict = {}
+            if hi_title:
+                hi_dict['title'] = hi_title
+            if hi_desc:
+                hi_dict['description'] = hi_desc
+            act_trans_json = json.dumps({'hi': hi_dict}, ensure_ascii=False)
+
+        activity.title = title
         activity.description = form.description.data.strip() if form.description.data else None
         activity.category_id = form.category_id.data
         activity.difficulty = form.difficulty.data
         activity.estimated_duration = form.estimated_duration.data
         activity.min_age = form.min_age.data
         activity.max_age = form.max_age.data
+        activity.translations_json = act_trans_json
         activity.is_active = form.is_active.data
         db.session.commit()
 
@@ -880,13 +1049,83 @@ def question_create(activity_id):
             flash(f"The correct answer '{correct_ans}' must exactly match one of the choices: {', '.join(options_list)}", "danger")
             return render_template('admin/question_form.html', form=form, activity=activity, title="Add Question", is_edit=False)
 
+        # English compliance checks
+        q_text = form.question_text.data.strip()
+        safe, reason = compliance_agent.check_text(q_text)
+        if not safe:
+            flash(f"Question prompt violates compliance: {reason}", "danger")
+            return render_template('admin/question_form.html', form=form, activity=activity, title="Add Question", is_edit=False)
+
+        for opt in options_list:
+            safe, reason = compliance_agent.check_text(opt)
+            if not safe:
+                flash(f"Option '{opt}' violates compliance: {reason}", "danger")
+                return render_template('admin/question_form.html', form=form, activity=activity, title="Add Question", is_edit=False)
+
+        if form.hint.data:
+            safe, reason = compliance_agent.check_text(form.hint.data.strip())
+            if not safe:
+                flash(f"Hint violates compliance: {reason}", "danger")
+                return render_template('admin/question_form.html', form=form, activity=activity, title="Add Question", is_edit=False)
+
+        # Hindi question fields & compliance
+        q_text_hi = form.question_text_hi.data.strip() if form.question_text_hi.data else ''
+        raw_hi_options = form.options_hi.data or ''
+        hi_options_list = [opt.strip() for opt in raw_hi_options.splitlines() if opt.strip()]
+        if len(hi_options_list) < 2 and ',' in raw_hi_options:
+            hi_options_list = [opt.strip() for opt in raw_hi_options.split(',') if opt.strip()]
+        correct_ans_hi = form.correct_answer_hi.data.strip() if form.correct_answer_hi.data else ''
+        hint_hi = form.hint_hi.data.strip() if form.hint_hi.data else ''
+
+        if hi_options_list and correct_ans_hi and correct_ans_hi not in hi_options_list:
+            flash(f"Hindi correct answer '{correct_ans_hi}' must match one of the Hindi choices.", "danger")
+            return render_template('admin/question_form.html', form=form, activity=activity, title="Add Question", is_edit=False)
+
+        if q_text_hi:
+            safe, reason = compliance_agent.check_text(q_text_hi)
+            if not safe:
+                flash(f"Hindi question prompt violates compliance: {reason}", "danger")
+                return render_template('admin/question_form.html', form=form, activity=activity, title="Add Question", is_edit=False)
+
+        for hopt in hi_options_list:
+            safe, reason = compliance_agent.check_text(hopt)
+            if not safe:
+                flash(f"Hindi option '{hopt}' violates compliance: {reason}", "danger")
+                return render_template('admin/question_form.html', form=form, activity=activity, title="Add Question", is_edit=False)
+
+        if correct_ans_hi:
+            safe, reason = compliance_agent.check_text(correct_ans_hi)
+            if not safe:
+                flash(f"Hindi correct answer violates compliance: {reason}", "danger")
+                return render_template('admin/question_form.html', form=form, activity=activity, title="Add Question", is_edit=False)
+
+        if hint_hi:
+            safe, reason = compliance_agent.check_text(hint_hi)
+            if not safe:
+                flash(f"Hindi hint violates compliance: {reason}", "danger")
+                return render_template('admin/question_form.html', form=form, activity=activity, title="Add Question", is_edit=False)
+
+        q_trans_json = None
+        if q_text_hi or hi_options_list or correct_ans_hi or hint_hi:
+            hi_dict = {}
+            if q_text_hi:
+                hi_dict['question_text'] = q_text_hi
+            if hi_options_list:
+                hi_dict['options'] = hi_options_list
+            if correct_ans_hi:
+                hi_dict['correct_answer'] = correct_ans_hi
+            if hint_hi:
+                hi_dict['hint'] = hint_hi
+            q_trans_json = json.dumps({'hi': hi_dict}, ensure_ascii=False)
+
         question = ActivityQuestion(
             activity_id=activity.id,
-            question_text=form.question_text.data.strip(),
+            question_text=q_text,
             question_type=form.question_type.data,
             options_json=json.dumps(options_list),
             correct_answer=correct_ans,
             hint=form.hint.data.strip() if form.hint.data else None,
+            translations_json=q_trans_json,
             order_num=form.order_num.data
         )
         db.session.add(question)
@@ -923,6 +1162,12 @@ def question_edit(activity_id, question_id):
     form = QuestionForm(obj=question)
     if request.method == 'GET':
         form.options.data = "\n".join(question.options)
+        hi_trans = question.translations.get('hi', {})
+        form.question_text_hi.data = hi_trans.get('question_text', '')
+        if hi_trans.get('options'):
+            form.options_hi.data = "\n".join(hi_trans['options'])
+        form.correct_answer_hi.data = hi_trans.get('correct_answer', '')
+        form.hint_hi.data = hi_trans.get('hint', '')
 
     if form.validate_on_submit():
         raw_options = form.options.data or ''
@@ -939,11 +1184,81 @@ def question_edit(activity_id, question_id):
             flash(f"The correct answer '{correct_ans}' must exactly match one of the choices: {', '.join(options_list)}", "danger")
             return render_template('admin/question_form.html', form=form, activity=activity, question=question, title="Edit Question", is_edit=True)
 
-        question.question_text = form.question_text.data.strip()
+        # English compliance checks
+        q_text = form.question_text.data.strip()
+        safe, reason = compliance_agent.check_text(q_text)
+        if not safe:
+            flash(f"Question prompt violates compliance: {reason}", "danger")
+            return render_template('admin/question_form.html', form=form, activity=activity, question=question, title="Edit Question", is_edit=True)
+
+        for opt in options_list:
+            safe, reason = compliance_agent.check_text(opt)
+            if not safe:
+                flash(f"Option '{opt}' violates compliance: {reason}", "danger")
+                return render_template('admin/question_form.html', form=form, activity=activity, question=question, title="Edit Question", is_edit=True)
+
+        if form.hint.data:
+            safe, reason = compliance_agent.check_text(form.hint.data.strip())
+            if not safe:
+                flash(f"Hint violates compliance: {reason}", "danger")
+                return render_template('admin/question_form.html', form=form, activity=activity, question=question, title="Edit Question", is_edit=True)
+
+        # Hindi question fields & compliance
+        q_text_hi = form.question_text_hi.data.strip() if form.question_text_hi.data else ''
+        raw_hi_options = form.options_hi.data or ''
+        hi_options_list = [opt.strip() for opt in raw_hi_options.splitlines() if opt.strip()]
+        if len(hi_options_list) < 2 and ',' in raw_hi_options:
+            hi_options_list = [opt.strip() for opt in raw_hi_options.split(',') if opt.strip()]
+        correct_ans_hi = form.correct_answer_hi.data.strip() if form.correct_answer_hi.data else ''
+        hint_hi = form.hint_hi.data.strip() if form.hint_hi.data else ''
+
+        if hi_options_list and correct_ans_hi and correct_ans_hi not in hi_options_list:
+            flash(f"Hindi correct answer '{correct_ans_hi}' must match one of the Hindi choices.", "danger")
+            return render_template('admin/question_form.html', form=form, activity=activity, question=question, title="Edit Question", is_edit=True)
+
+        if q_text_hi:
+            safe, reason = compliance_agent.check_text(q_text_hi)
+            if not safe:
+                flash(f"Hindi question prompt violates compliance: {reason}", "danger")
+                return render_template('admin/question_form.html', form=form, activity=activity, question=question, title="Edit Question", is_edit=True)
+
+        for hopt in hi_options_list:
+            safe, reason = compliance_agent.check_text(hopt)
+            if not safe:
+                flash(f"Hindi option '{hopt}' violates compliance: {reason}", "danger")
+                return render_template('admin/question_form.html', form=form, activity=activity, question=question, title="Edit Question", is_edit=True)
+
+        if correct_ans_hi:
+            safe, reason = compliance_agent.check_text(correct_ans_hi)
+            if not safe:
+                flash(f"Hindi correct answer violates compliance: {reason}", "danger")
+                return render_template('admin/question_form.html', form=form, activity=activity, question=question, title="Edit Question", is_edit=True)
+
+        if hint_hi:
+            safe, reason = compliance_agent.check_text(hint_hi)
+            if not safe:
+                flash(f"Hindi hint violates compliance: {reason}", "danger")
+                return render_template('admin/question_form.html', form=form, activity=activity, question=question, title="Edit Question", is_edit=True)
+
+        q_trans_json = None
+        if q_text_hi or hi_options_list or correct_ans_hi or hint_hi:
+            hi_dict = {}
+            if q_text_hi:
+                hi_dict['question_text'] = q_text_hi
+            if hi_options_list:
+                hi_dict['options'] = hi_options_list
+            if correct_ans_hi:
+                hi_dict['correct_answer'] = correct_ans_hi
+            if hint_hi:
+                hi_dict['hint'] = hint_hi
+            q_trans_json = json.dumps({'hi': hi_dict}, ensure_ascii=False)
+
+        question.question_text = q_text
         question.question_type = form.question_type.data
         question.options_json = json.dumps(options_list)
         question.correct_answer = correct_ans
         question.hint = form.hint.data.strip() if form.hint.data else None
+        question.translations_json = q_trans_json
         question.order_num = form.order_num.data
         db.session.commit()
 

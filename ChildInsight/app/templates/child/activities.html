@@ -44,7 +44,7 @@
         <a href="{{ url_for('child.activity_list', child_id=child.id, category_id=cat.id) }}" style="text-decoration: none; color: inherit;">
             <div class="child-card" style="padding: 2rem 1.5rem; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: transform 0.15s; border-color: #DDD6FE;">
                 <div style="font-size: 3.5rem; margin-bottom: 0.75rem;">{{ cat.icon }}</div>
-                <h2 style="font-size: 1.5rem; color: var(--color-text-main); margin-bottom: 0.5rem;">{{ t(cat.slug, default=cat.name) if child_lang == 'hi' else cat.name }}</h2>
+                <h2 style="font-size: 1.5rem; color: var(--color-text-main); margin-bottom: 0.5rem;">{{ cat.get_name(child_lang) }}</h2>
                 <span class="btn child-btn child-btn-purple" style="font-size: 0.95rem; padding: 0.5rem 1.25rem; margin-top: 0.75rem;">
                     {{ t('explore') }}
                 </span>

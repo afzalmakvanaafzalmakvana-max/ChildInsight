@@ -34,7 +34,10 @@
                             <span style="font-size: 1.5rem; line-height: 1;">{{ cat.icon or '📂' }}</span>
                             <div>
                                 <strong class="admin-table-title" title="{{ cat.name }}">{{ cat.name }}</strong>
-                                <span style="color: var(--color-text-muted); font-size: 0.8rem;">ID: #{{ cat.id }}</span>
+                                {% if cat.has_translation('hi') %}
+                                    <span class="badge badge-purple" style="font-size: 0.72rem; padding: 0.15rem 0.4rem; vertical-align: middle;" title="Hindi: {{ cat.get_name('hi') }}">🌐 {{ cat.get_name('hi') }}</span>
+                                {% endif %}
+                                <span style="color: var(--color-text-muted); font-size: 0.8rem; display: block;">ID: #{{ cat.id }}</span>
                             </div>
                         </div>
                     </td>

@@ -89,6 +89,11 @@
                             </span>
                             <span class="brand-badge badge-neutral" style="font-size: 0.72rem; padding: 0.15rem 0.45rem;">Ages {{ act.age_band }}</span>
                             <span style="color: var(--color-text-muted); font-size: 0.75rem;">⏱ ~{{ act.estimated_duration }}m</span>
+                            {% if act.has_translation('hi') %}
+                                <span class="brand-badge badge-purple" style="font-size: 0.72rem; padding: 0.15rem 0.45rem;" title="Hindi translation available: {{ act.get_title('hi') }}">🌐 HI</span>
+                            {% else %}
+                                <span class="brand-badge" style="background: #FEF3C7; color: #92400E; font-size: 0.72rem; padding: 0.15rem 0.45rem; border: 1px solid #FDE68A;" title="English only — Hindi translation pending">EN only</span>
+                            {% endif %}
                             {% if act.is_demo %}
                                 <span class="brand-badge badge-warning" style="font-size: 0.72rem; padding: 0.15rem 0.45rem;">Demo</span>
                             {% endif %}

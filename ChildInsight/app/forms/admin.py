@@ -26,11 +26,11 @@ class ChangeRoleForm(FlaskForm):
 
 class CategoryForm(FlaskForm):
     """Form to create or edit an activity category."""
-    name = StringField('Category Name', validators=[
+    name = StringField('Category Name (English)', validators=[
         DataRequired(message="Category name is required."),
         Length(min=2, max=100, message="Category name must be between 2 and 100 characters.")
     ])
-    description = TextAreaField('Description', validators=[
+    description = TextAreaField('Description (English)', validators=[
         Optional(),
         Length(max=500, message="Description cannot exceed 500 characters.")
     ])
@@ -38,18 +38,34 @@ class CategoryForm(FlaskForm):
         Optional(),
         Length(max=50, message="Icon cannot exceed 50 characters.")
     ])
+    name_hi = StringField('Category Name (Hindi — optional)', validators=[
+        Optional(),
+        Length(max=100, message="Hindi category name cannot exceed 100 characters.")
+    ])
+    description_hi = TextAreaField('Description (Hindi — optional)', validators=[
+        Optional(),
+        Length(max=500, message="Hindi description cannot exceed 500 characters.")
+    ])
     submit = SubmitField('Save Category')
 
 
 class ActivityForm(FlaskForm):
     """Form to create or edit an educational activity."""
-    title = StringField('Activity Title', validators=[
+    title = StringField('Activity Title (English)', validators=[
         DataRequired(message="Activity title is required."),
         Length(min=2, max=150, message="Title must be between 2 and 150 characters.")
     ])
-    description = TextAreaField('Description / Instructions', validators=[
+    description = TextAreaField('Description / Instructions (English)', validators=[
         Optional(),
         Length(max=1000, message="Description cannot exceed 1000 characters.")
+    ])
+    title_hi = StringField('Activity Title (Hindi — optional)', validators=[
+        Optional(),
+        Length(max=150, message="Hindi title cannot exceed 150 characters.")
+    ])
+    description_hi = TextAreaField('Description / Instructions (Hindi — optional)', validators=[
+        Optional(),
+        Length(max=1000, message="Hindi description cannot exceed 1000 characters.")
     ])
     category_id = SelectField('Category', coerce=int, validators=[
         DataRequired(message="Please select a category.")
@@ -78,7 +94,7 @@ class ActivityForm(FlaskForm):
 
 class QuestionForm(FlaskForm):
     """Form to create or edit an activity question."""
-    question_text = TextAreaField('Question Prompt / Text', validators=[
+    question_text = TextAreaField('Question Prompt / Text (English)', validators=[
         DataRequired(message="Question prompt is required."),
         Length(min=2, max=1000, message="Question prompt must be between 2 and 1000 characters.")
     ])
@@ -89,16 +105,31 @@ class QuestionForm(FlaskForm):
         ('sequence', 'Pattern / Sequence'),
         ('word_puzzle', 'Word Puzzle / Clue')
     ], default='multiple_choice', validators=[DataRequired()])
-    options = TextAreaField('Choices / Options (one option per line)', validators=[
+    options = TextAreaField('Choices / Options (English — one option per line)', validators=[
         DataRequired(message="At least two choices are required.")
     ])
-    correct_answer = StringField('Correct Answer (must match one choice)', validators=[
+    correct_answer = StringField('Correct Answer (English — must match one choice)', validators=[
         DataRequired(message="Correct answer is required."),
         Length(max=255, message="Correct answer cannot exceed 255 characters.")
     ])
-    hint = StringField('Encouraging Hint (Optional)', validators=[
+    hint = StringField('Encouraging Hint (English — optional)', validators=[
         Optional(),
         Length(max=255, message="Hint cannot exceed 255 characters.")
+    ])
+    question_text_hi = TextAreaField('Question Prompt / Text (Hindi — optional)', validators=[
+        Optional(),
+        Length(max=1000, message="Hindi question prompt cannot exceed 1000 characters.")
+    ])
+    options_hi = TextAreaField('Choices / Options (Hindi — optional, one option per line)', validators=[
+        Optional()
+    ])
+    correct_answer_hi = StringField('Correct Answer (Hindi — optional)', validators=[
+        Optional(),
+        Length(max=255, message="Hindi correct answer cannot exceed 255 characters.")
+    ])
+    hint_hi = StringField('Encouraging Hint (Hindi — optional)', validators=[
+        Optional(),
+        Length(max=255, message="Hindi hint cannot exceed 255 characters.")
     ])
     order_num = IntegerField('Question Order #', default=1, validators=[
         DataRequired(message="Question order number is required."),
