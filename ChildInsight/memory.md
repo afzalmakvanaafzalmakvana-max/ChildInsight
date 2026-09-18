@@ -382,6 +382,12 @@ at the end of every phase/prompt so the next session (or the next prompt) has fu
   5. Multi-Cohort Deduplication: To prevent administrator fatigue, multiple curriculum suggestions for the same category across distinct developmental bands are grouped into a single consolidated card displaying all affected bands (e.g., `affects ages 4-6, 9-12, 12-14`) with aggregated affected children counts and maximum urgency scores.
   6. Actionable Deep Links: Every action item provides a direct deep link to the relevant existing operational workflow (e.g. `/admin/activities/ai-draft/generate?category_id=...`, `/admin/content-suggestions`, or `/admin/activities/integrity-check`), enabling immediate one-click resolution.
 
+- **Assumption 60 (Default Bilingual Creation & Integrity Safeguards):**
+  1. Default Bilingual AI Generation: Every new AI activity draft generated (whether from a translation gap suggestion or directly via the standalone "Generate with AI" button) produces paired English and Hindi content side-by-side by default.
+  2. Optional Manual Hindi Fields: Manual admin forms for categories, activities, and questions provide dedicated optional Hindi translation fields clearly marked `"Hindi (optional — can be added later)"`.
+  3. Integrity Audit Safeguard (Case D): If an administrator creates an activity without Hindi translations, it is saved as English-only, and the Content Integrity Agent flags it as `incomplete_translation` (`severity='medium'`) under Rule 4 Case D so it appears in the Admin Action Center and audit issues for follow-up rather than being silently forgotten.
+  4. Backward-Compatible Category Localization: `Category.get_name(lang)` checks `translations_json['hi']['name']` first, then falls back to `app.translations.t(self.slug, default=self.name, lang=lang)` for seeded categories, and finally returns `self.name` (English), ensuring seamless localization for both legacy seeded and newly created categories.
+
 ## 5. How to Use This File
 - Update after every prompt/session — remove stale entries, keep it accurate.
 - Read this file first before starting a new phase so nothing already built gets redone

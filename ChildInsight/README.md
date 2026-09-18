@@ -134,18 +134,49 @@ Translations are stored alongside original activity records using SQLite/Postgre
      }
    }
    ```
+3. **`categories.translations_json`**:
+   ```json
+   {
+     "hi": {
+       "name": "दृश्य शिक्षण",
+       "description": "पैटर्न, रंगों और दृश्य पहेलियों के माध्यम से सीखें"
+     }
+   }
+   ```
 
 ### Dynamic Model Getters
 
 Model helper methods automatically resolve the child's active language with fallback to English:
+- `category.get_name(lang)`: Returns translated category name or localized dictionary/default name.
+- `category.get_description(lang)`: Returns translated category description.
+- `category.has_translation(lang)`: Checks if a translation payload exists for the target language.
 - `activity.get_title(lang)`: Returns translated title or default English title.
 - `activity.get_description(lang)`: Returns translated description or default English description.
 - `activity.has_translation(lang)`: Checks if a translation payload exists for the target language.
-- `question.get_question_text(lang)`: Returns translated question prompt.
+- `question.get_question_text(lang)` / `question.get_prompt(lang)`: Returns translated question prompt.
 - `question.get_options(lang)`: Returns translated list of answer options.
 - `question.get_shuffled_options(lang)`: Returns randomized translated options for display.
 - `question.get_correct_answer(lang)`: Returns translated correct answer for evaluation.
 - `question.get_hint(lang)`: Returns translated learning hint.
+
+---
+
+### 📝 Default Bilingual Content Creation & Administration
+
+To ensure newly authored learning content is never English-only by accident, bilingual (English + Hindi) content creation is the platform standard across all administration routes:
+
+1. **Standalone AI Drafting (`/admin/activities/ai-draft/generate`)**:
+   - Always generates paired English and Hindi drafts together (titles, descriptions, questions, options, answers, hints).
+   - Reviewed side-by-side on `activity_draft_review.html` with explicit human-in-the-loop approval before saving to `translations_json`.
+
+2. **Manual Activity & Question Authoring (`/admin/activities/new`, `/admin/activities/<id>/questions/new`)**:
+   - Dedicated Hindi translation cards clearly marked `"Hindi (optional — can be added later)"`.
+   - If left blank, the activity is created as English-only, and the Content Integrity Agent automatically flags it as `incomplete_translation` (Case D) so administrators can follow up rather than letting untranslated content slip by unnoticed.
+   - All submitted Hindi fields are validated through `compliance_agent.check_text()` to prevent non-compliant terminology.
+
+3. **Category Management (`/admin/categories/new`, `/admin/categories/<id>/edit`)**:
+   - Includes optional Hindi name and description inputs persisted to `categories.translations_json`.
+   - Child category hubs and activity lists automatically render localized category names via `category.get_name(child_lang)`.
 
 ---
 
@@ -326,7 +357,8 @@ ChildInsight incorporates an internal agent layer under `app/agent/` designed to
 
 ### 2. Content Integrity Agent (`content_integrity_agent.py`)
 - **What it does:** Continuously audits the educational catalog for anomalies: activities with zero questions, empty categories, orphaned questions, invalid difficulty levels, out-of-range age bounds (`min_age > max_age`), duplicate questions within an activity, and **translation completeness**.
-- **Translation Completeness & Integrity:** Specifically inspects activities with Hindi translations to catch and report `incomplete_translation` issues:
+- **Translation Completeness & Integrity:** Specifically inspects activities to catch and report `incomplete_translation` issues:
+  - English-only activities with zero Hindi translation (Case D), ensuring manually authored activities created without Hindi input surface in the Admin Action Center for follow-up rather than being silently forgotten.
   - Activities where the title is translated into Hindi, but questions lack Hindi translations.
   - Activities where questions have Hindi translations, but the activity title/description lacks a Hindi translation.
   - Question answer option count mismatches between English and Hindi versions (e.g. 4 English choices vs 3 Hindi choices).
@@ -354,7 +386,7 @@ ChildInsight incorporates an internal agent layer under `app/agent/` designed to
   - **Category Style Grounding:** Analyzes existing activities in the target category as tone and question style benchmarks.
   - **Age-Band Calibration:** Inspects cross-category activities across all 5 cognitive domains for the target developmental cohort (4–6, 6–9, 9–12, 12–14) to match established vocabulary complexity and cognitive load.
   - **Curriculum Gap Targeting:** Directly incorporates data-backed gap detection reasoning from linked Content Suggestions so drafts solve genuine platform shortages.
-  - **Dual-Language Generation for Translation Gaps:** When addressing a `translation_gap`, the agent generates **both English and Hindi versions together** (paired titles, descriptions, 5–6 multiple-choice questions with 4 options each, correct answers, and scaffolding hints) in a single unified draft.
+  - **Default Bilingual Generation (English + Hindi):** Bilingual generation is the DEFAULT across all AI drafting pathways—both standalone "Generate with AI (Draft)" workflows and translation gap suggestions. Generates paired English and Hindi versions together (titles, descriptions, 5–6 multiple-choice questions with 4 options each, correct answers, and scaffolding hints) in a single unified draft with side-by-side review fields.
   - **Bilingual Ethical Compliance Verification:** Applies both English and Hindi negative constraints in the generation prompt and validates all generated English and Hindi question prompts, options, answers, and hints through `compliance_agent.check_text()`, retrying up to 2 times and discarding non-compliant items before presenting to the administrator.
 - **Strict Human-in-the-Loop Boundary:** The agent **never auto-publishes or writes directly to the database**. All generated drafts are presented in an editable review screen (`/admin/activities/ai-draft/generate`) displaying transparent grounding metadata and side-by-side editable fields for English and Hindi. Content is only committed to the database when an administrator explicitly clicks **"Approve & Publish"**, simultaneously storing both language versions in `translations_json`, while clicking **"Discard"** immediately throws the draft away.
 
