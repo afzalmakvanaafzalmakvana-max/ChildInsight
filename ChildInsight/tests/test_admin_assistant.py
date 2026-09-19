@@ -314,6 +314,187 @@ class AdminAssistantTestCase(unittest.TestCase):
         self.assertIn("This category has 0 activities", content)
         self.assertIn("Add Activity Now", content)
 
+    # =========================================================================
+    # 7. MULTI-TURN CONVERSATIONAL MEMORY & FOLLOW-UP RESOLUTION
+    # =========================================================================
+
+    def test_multi_turn_conversational_memory(self):
+        """Multi-turn conversation tests elliptical follow-ups and pronoun resolution across turns."""
+        # Turn 1: Ask about Science & Nature
+        res1 = admin_assistant.ask_assistant("What's wrong with the Science & Nature category?")
+        self.assertIn("Science & Nature", res1['answer'])
+
+        history = [
+            {'role': 'user', 'content': "What's wrong with the Science & Nature category?"},
+            {'role': 'assistant', 'content': res1['answer']}
+        ]
+
+        # Turn 2: Follow-up query about Logic
+        res2 = admin_assistant.ask_assistant("What about Logic?", history=history)
+        self.assertIn("Logic", res2['answer'])
+        self.assertIn("activities", res2['answer'].lower())
+
+        history.extend([
+            {'role': 'user', 'content': "What about Logic?"},
+            {'role': 'assistant', 'content': res2['answer']}
+        ])
+
+        # Turn 3: Pronoun follow-up "How many activities does it have?" (resolves "it" to Logic)
+        res3 = admin_assistant.ask_assistant("How many activities does it have?", history=history)
+        self.assertIn("Logic", res3['answer'])
+        self.assertIn("active activities", res3['answer'])
+
+    # =========================================================================
+    # 8. BROADER PLATFORM QUESTIONS (USER COUNTS, RECOMMENDATION ENGINE, HOW-TO)
+    # =========================================================================
+
+    def test_broader_platform_questions_user_counts(self):
+        """Assistant answers questions about total platform users and roles with exact data grounding."""
+        total_users = User.query.count()
+        parents = User.query.filter_by(role='parent').count()
+        teachers = User.query.filter_by(role='teacher').count()
+        admins = User.query.filter_by(role='admin').count()
+        children = Child.query.count()
+
+        res = admin_assistant.ask_assistant("How many users are registered on the platform?")
+        self.assertIn(f"**{total_users} registered user(s)**", res['answer'])
+        self.assertIn(f"- **Parents**: {parents}", res['answer'])
+        self.assertIn(f"- **Teachers**: {teachers}", res['answer'])
+        self.assertIn(f"- **Administrators**: {admins}", res['answer'])
+        self.assertIn(f"- **Children / Learners**: {children}", res['answer'])
+        self.assertTrue(any('/admin/users' in l['url'] for l in res['links']))
+
+    def test_broader_platform_questions_recommendation_engine(self):
+        """Assistant accurately explains the 3-layer recommendation engine and PRD §4 non-diagnostic ethical rule."""
+        res = admin_assistant.ask_assistant("How does the recommendation engine work?")
+        self.assertIn("3-layer", res['answer'].lower())
+        self.assertIn("80%", res['answer'])
+        self.assertIn("50%", res['answer'])
+        self.assertIn("stamina", res['answer'].lower())
+        self.assertIn("k-means", res['answer'].lower())
+        self.assertIn("non-diagnostic", res['answer'].lower())
+        self.assertTrue(any(l['url'] == '/admin/agents' for l in res['links']))
+
+    def test_broader_platform_questions_how_to(self):
+        """Assistant provides step-by-step guidance matching actual routes and links for admin actions."""
+        # Assign teacher
+        res_assign = admin_assistant.ask_assistant("How do I assign a teacher to a student?")
+        self.assertIn("Teacher Assignments", res_assign['answer'])
+        self.assertIn("/admin/assignments", res_assign['answer'])
+        self.assertTrue(any(l['url'] == '/admin/assignments' for l in res_assign['links']))
+
+        # Create category
+        res_cat = admin_assistant.ask_assistant("How to create a new category?")
+        self.assertIn("/admin/categories/new", res_cat['answer'])
+        self.assertTrue(any(l['url'] == '/admin/categories/new' for l in res_cat['links']))
+
+    # =========================================================================
+    # 9. HINDI CONVERSATION SUPPORT
+    # =========================================================================
+
+    def test_hindi_conversation_support(self):
+        """Devanagari query triggers fully grounded Hindi response with proper terminology."""
+        res = admin_assistant.ask_assistant("प्लेटफ़ॉर्म में कितने उपयोगकर्ता हैं?")
+        self.assertEqual(res.get('detected_language'), 'hi')
+        self.assertTrue(admin_assistant.is_hindi_text(res['answer']))
+        self.assertIn("पंजीकृत उपयोगकर्ता", res['answer'])
+        self.assertIn("अभिभावक", res['answer'])
+        self.assertIn("शिक्षक", res['answer'])
+        self.assertIn(str(User.query.count()), res['answer'])
+
+        # Category status in Hindi
+        res_cat = admin_assistant.ask_assistant("तर्क और पैटर्न की स्थिति क्या है?")
+        self.assertEqual(res_cat.get('detected_language'), 'hi')
+        self.assertTrue(admin_assistant.is_hindi_text(res_cat['answer']))
+        self.assertIn("गतिविधियां", res_cat['answer'])
+
+    def test_hindi_action_request_refusal(self):
+        """Action request in Hindi is refused politely with Hindi explanation and direct links."""
+        res = admin_assistant.ask_assistant("कृपया इस श्रेणी को मेरे लिए ठीक कर दो")
+        self.assertTrue(res.get('refusal'))
+        self.assertEqual(res.get('detected_language'), 'hi')
+        self.assertIn("सलाहकार सहायक", res['answer'])
+        self.assertIn("नहीं कर सकता", res['answer'])
+        self.assertTrue(len(res.get('links', [])) > 0)
+
+    # =========================================================================
+    # 10. COMPREHENSIVE ZERO DATABASE WRITES ACROSS EXTENDED FEATURES
+    # =========================================================================
+
+    def test_assistant_zero_database_writes_comprehensive(self):
+        """Comprehensive test asserting zero mutations across all queries (memory, Hindi, how-to, broad questions)."""
+        counts_before = {
+            'activities': Activity.query.count(),
+            'categories': Category.query.count(),
+            'questions': ActivityQuestion.query.count(),
+            'suggestions': ContentSuggestion.query.count(),
+            'users': User.query.count(),
+            'children': Child.query.count(),
+            'audit_logs': AuditLog.query.count()
+        }
+
+        test_queries = [
+            "How many users on the platform?",
+            "How do recommendations work?",
+            "How do I assign a teacher?",
+            "How to create a new category?",
+            "प्लेटफ़ॉर्म में कितने उपयोगकर्ता हैं?",
+            "तर्क और पैटर्न की स्थिति क्या है?",
+            "कृपया इसे ठीक कर दो",
+            "What about Logic?",
+            "How many activities does it have?"
+        ]
+
+        history = []
+        for q in test_queries:
+            res = admin_assistant.ask_assistant(q, history=history)
+            history.append({'role': 'user', 'content': q})
+            history.append({'role': 'assistant', 'content': res.get('answer', '')})
+
+        counts_after = {
+            'activities': Activity.query.count(),
+            'categories': Category.query.count(),
+            'questions': ActivityQuestion.query.count(),
+            'suggestions': ContentSuggestion.query.count(),
+            'users': User.query.count(),
+            'children': Child.query.count(),
+            'audit_logs': AuditLog.query.count()
+        }
+        self.assertEqual(counts_before, counts_after, "Zero database mutations must occur across all assistant queries.")
+
+    # =========================================================================
+    # 11. ASSISTANT CLEAR ENDPOINT & RBAC
+    # =========================================================================
+
+    def test_assistant_clear_endpoint_and_rbac(self):
+        """Test /admin/assistant/clear requires admin role and clears session history buffer."""
+        # 1. Unauthenticated -> 302 to login
+        res_guest = self.client.post('/admin/assistant/clear')
+        self.assertEqual(res_guest.status_code, 302)
+
+        # 2. Parent -> 403 Forbidden
+        self._login('parent@example.com', 'ParentPass123!')
+        res_parent = self.client.post('/admin/assistant/clear')
+        self.assertEqual(res_parent.status_code, 403)
+
+        # 3. Child -> 403 Forbidden
+        self._login('child@example.com', 'ChildPass123!')
+        res_child = self.client.post('/admin/assistant/clear')
+        self.assertEqual(res_child.status_code, 403)
+
+        # 4. Admin -> 200 OK and clears memory
+        self._login('admin@example.com', 'AdminPass123!')
+        with self.client.session_transaction() as sess:
+            sess['admin_assistant_history'] = [{'role': 'user', 'content': 'Hello'}]
+
+        res_admin = self.client.post('/admin/assistant/clear')
+        self.assertEqual(res_admin.status_code, 200)
+        data = json.loads(res_admin.data.decode('utf-8'))
+        self.assertTrue(data.get('success'))
+
+        with self.client.session_transaction() as sess:
+            self.assertNotIn('admin_assistant_history', sess)
+
 
 if __name__ == '__main__':
     unittest.main()

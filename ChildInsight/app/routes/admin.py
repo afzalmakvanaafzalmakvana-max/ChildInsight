@@ -1744,13 +1744,17 @@ def assistant_chat():
     """
     Admin Assistant guidance chat endpoint.
     Answers administrator questions using real telemetry; strictly read-only.
+    Maintains conversational memory in Flask session buffer.
     """
     question = ''
+    req_lang = None
     if request.is_json:
         data = request.get_json() or {}
         question = data.get('question', '').strip()
+        req_lang = data.get('language', '').strip() or None
     else:
         question = request.form.get('question', '').strip()
+        req_lang = request.form.get('language', '').strip() or None
 
     if not question:
         return jsonify({
@@ -1758,18 +1762,51 @@ def assistant_chat():
             'error': "Question text is required."
         }), 400
 
+    # Retrieve conversational history buffer from Flask session
+    history = session.get('admin_assistant_history', [])
+    if not isinstance(history, list):
+        history = []
+
     try:
-        result = admin_assistant.ask_assistant(question)
+        result = admin_assistant.ask_assistant(
+            question=question,
+            history=history,
+            language=req_lang
+        )
+
+        # Update conversational memory buffer in session
+        history.append({'role': 'user', 'content': question})
+        history.append({'role': 'assistant', 'content': result.get('answer', '')})
+
+        # Maintain a sliding buffer of the last 10 messages (5 turns)
+        session['admin_assistant_history'] = history[-10:]
+        session.modified = True
+
         return jsonify({
             'success': True,
             'answer': result.get('answer', ''),
             'links': result.get('links', []),
-            'refusal': result.get('refusal', False)
+            'refusal': result.get('refusal', False),
+            'detected_language': result.get('detected_language', 'en')
         })
     except Exception as e:
+        logger.exception("Failed to get assistant response: %s", e)
         return jsonify({
             'success': False,
             'error': f"Failed to get assistant response: {str(e)}"
         }), 500
+
+
+@admin_bp.route('/assistant/clear', methods=['POST'])
+@login_required
+@role_required('admin')
+def assistant_clear():
+    """Clears the conversational history buffer for the current admin session."""
+    session.pop('admin_assistant_history', None)
+    session.modified = True
+    return jsonify({
+        'success': True,
+        'message': "Conversation history cleared."
+    })
 
 

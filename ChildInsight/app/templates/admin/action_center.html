@@ -130,8 +130,21 @@
                     <span class="agent-badge-pill agent-badge-idle" style="font-size: 0.7rem;">Never Acts</span>
                 </div>
                 <p style="color: var(--color-text-muted); font-size: 0.84rem; margin: 0.25rem 0 0;">
-                    Ask questions in plain language. The assistant explains, diagnoses, and guides using verified agent telemetry; it never modifies data or database records.
+                    Ask questions in English or Hindi (हिन्दी). Conversational memory preserves context across follow-ups; strictly advisory-only.
                 </p>
+            </div>
+
+            <!-- Language Controls & Clear Chat -->
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <div class="btn-group" id="assistant-lang-group" style="display: inline-flex; border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden;">
+                    <button type="button" class="assistant-lang-btn active" data-lang="auto" style="padding: 0.25rem 0.55rem; border: none; background: var(--color-primary, #4361ee); color: #fff; cursor: pointer; font-size: 0.75rem; font-weight: 600;">Auto</button>
+                    <button type="button" class="assistant-lang-btn" data-lang="en" style="padding: 0.25rem 0.55rem; border: none; background: var(--color-surface); color: var(--color-text); cursor: pointer; font-size: 0.75rem;">EN</button>
+                    <button type="button" class="assistant-lang-btn" data-lang="hi" style="padding: 0.25rem 0.55rem; border: none; background: var(--color-surface); color: var(--color-text); cursor: pointer; font-size: 0.75rem;">हिन्दी</button>
+                </div>
+                <button type="button" id="assistant-clear-btn" class="btn btn-outline btn-sm" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; display: flex; align-items: center; gap: 0.25rem;" title="Clear conversation memory for this session">
+                    <span>🗑️</span>
+                    <span>Clear Chat</span>
+                </button>
             </div>
         </div>
 
@@ -141,13 +154,16 @@
                 What should I do next?
             </button>
             <button type="button" class="btn btn-outline btn-sm quick-prompt-btn" style="font-size: 0.76rem; padding: 0.2rem 0.6rem; border-radius: 9999px;">
+                How many users on the platform?
+            </button>
+            <button type="button" class="btn btn-outline btn-sm quick-prompt-btn" style="font-size: 0.76rem; padding: 0.2rem 0.6rem; border-radius: 9999px;">
+                How do recommendations work?
+            </button>
+            <button type="button" class="btn btn-outline btn-sm quick-prompt-btn" style="font-size: 0.76rem; padding: 0.2rem 0.6rem; border-radius: 9999px;">
                 Did I make any mistakes?
             </button>
             <button type="button" class="btn btn-outline btn-sm quick-prompt-btn" style="font-size: 0.76rem; padding: 0.2rem 0.6rem; border-radius: 9999px;">
-                What's wrong with the Science & Nature category?
-            </button>
-            <button type="button" class="btn btn-outline btn-sm quick-prompt-btn" style="font-size: 0.76rem; padding: 0.2rem 0.6rem; border-radius: 9999px;">
-                What is our platform health posture?
+                प्लेटफ़ॉर्म की स्थिति क्या है?
             </button>
         </div>
 
@@ -344,8 +360,56 @@ document.addEventListener('DOMContentLoaded', function () {
         var loading = document.getElementById('assistant-loading-indicator');
         var csrfInput = document.getElementById('assistant-csrf-token');
         var quickBtns = document.querySelectorAll('.quick-prompt-btn');
+        var langBtns = document.querySelectorAll('.assistant-lang-btn');
+        var clearBtn = document.getElementById('assistant-clear-btn');
 
         if (!form || !input || !log) return;
+
+        var selectedLang = 'auto';
+
+        // Language toggle buttons
+        langBtns.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                langBtns.forEach(function(b) {
+                    b.classList.remove('active');
+                    b.style.background = 'var(--color-surface)';
+                    b.style.color = 'var(--color-text)';
+                    b.style.fontWeight = 'normal';
+                });
+                btn.classList.add('active');
+                btn.style.background = 'var(--color-primary, #4361ee)';
+                btn.style.color = '#fff';
+                btn.style.fontWeight = '600';
+                selectedLang = btn.getAttribute('data-lang') || 'auto';
+            });
+        });
+
+        // Clear chat button
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function() {
+                if (!confirm('Clear conversational memory and chat log for this session?')) return;
+                var csrfToken = csrfInput ? csrfInput.value : '';
+                fetch('/admin/assistant/clear', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    }
+                })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    log.innerHTML = '<div class="assistant-msg" style="padding: 0.6rem 0.85rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; font-size: 0.85rem; line-height: 1.5;">' +
+                        '<div style="display: flex; align-items: center; gap: 0.35rem; font-weight: 600; font-size: 0.75rem; color: var(--color-primary, #4361ee); margin-bottom: 0.2rem;">' +
+                        '<span>🤖</span> Admin Assistant <span class="brand-badge" style="font-size: 0.65rem; margin-left: 0.35rem;">Memory Reset</span>' +
+                        '</div>' +
+                        '<div>Conversational memory cleared. How can I assist you with the platform?</div>' +
+                        '</div>';
+                })
+                .catch(function(err) {
+                    alert('Failed to clear chat memory.');
+                });
+            });
+        }
 
         quickBtns.forEach(function(btn) {
             btn.addEventListener('click', function() {
@@ -397,7 +461,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': csrfToken
                 },
-                body: JSON.stringify({ question: question })
+                body: JSON.stringify({ question: question, language: selectedLang })
             })
             .then(function(res) { return res.json(); })
             .then(function(data) {
@@ -408,8 +472,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 asstMsgDiv.className = 'assistant-msg';
                 asstMsgDiv.style.cssText = 'padding: 0.6rem 0.85rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; font-size: 0.85rem; line-height: 1.5;';
 
+                var langBadge = data.detected_language === 'hi' ?
+                    ' <span class="brand-badge" style="font-size: 0.65rem; margin-left: 0.35rem; background: #e0e7ff; color: #3730a3;">हिन्दी</span>' : '';
+
                 var header = '<div style="display: flex; align-items: center; gap: 0.35rem; font-weight: 600; font-size: 0.75rem; color: var(--color-primary, #4361ee); margin-bottom: 0.2rem;">' +
-                    '<span>🤖</span> Admin Assistant' +
+                    '<span>🤖</span> Admin Assistant' + langBadge +
                     (data.refusal ? ' <span class="agent-badge-pill agent-badge-idle" style="font-size: 0.68rem; margin-left: 0.35rem;">Advisory Boundary</span>' : '') +
                     '</div>';
 
