@@ -267,6 +267,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Close open dropdown menus when an item link is clicked
+    const dropdownLinks = document.querySelectorAll('.dropdown-menu a');
+    dropdownLinks.forEach(link => {
+        if (link._navDropdownLinkBound) return;
+        link._navDropdownLinkBound = true;
+        link.addEventListener('click', () => {
+            closeAllNavDropdowns();
+        });
+    });
+
     // Dismiss dropdowns on outside click (only register once on document)
     if (!document._navbarDropdownOutsideBound) {
         document._navbarDropdownOutsideBound = true;

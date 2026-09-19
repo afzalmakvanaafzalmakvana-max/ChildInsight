@@ -14,7 +14,7 @@ from app.models.audit_log import AuditLog
 from app.models.content_suggestion import ContentSuggestion
 from app.forms.admin import AssignTeacherForm, ChangeRoleForm, CategoryForm, ActivityForm, QuestionForm
 from app.services import audit_service
-from app.agent import compliance_agent
+from app.agent import compliance_agent, admin_assistant
 from app.utils.decorators import role_required
 from app.routes.auth import is_safe_redirect_url
 
@@ -122,6 +122,11 @@ def user_change_role(user_id):
         old_role = user.role
         user.role = form.role.data
         db.session.commit()
+
+        # Proactive mistake-catching via Admin Assistant
+        note = admin_assistant.check_admin_action_result('role_change', 'user', user.id, {'new_role': user.role, 'old_role': old_role})
+        if note:
+            session['assistant_note'] = note
 
         # Record action in audit log
         audit_service.log_action(
@@ -372,6 +377,11 @@ def category_create():
         db.session.add(category)
         db.session.commit()
 
+        # Proactive mistake-catching via Admin Assistant
+        note = admin_assistant.check_admin_action_result('create', 'category', category.id)
+        if note:
+            session['assistant_note'] = note
+
         # Mark linked suggestion as approved if provided
         if suggestion_id:
             sugg = db.session.get(ContentSuggestion, suggestion_id)
@@ -457,6 +467,11 @@ def category_edit(category_id):
         category.description = form.description.data.strip() if form.description.data else None
         category.translations_json = cat_trans_json
         db.session.commit()
+
+        # Proactive mistake-catching via Admin Assistant
+        note = admin_assistant.check_admin_action_result('update', 'category', category.id)
+        if note:
+            session['assistant_note'] = note
 
         audit_service.log_action(
             user_id=current_user.id,
@@ -638,6 +653,11 @@ def activity_create():
         db.session.add(activity)
         db.session.commit()
 
+        # Proactive mistake-catching via Admin Assistant
+        note = admin_assistant.check_admin_action_result('create', 'activity', activity.id)
+        if note:
+            session['assistant_note'] = note
+
         # Mark linked suggestion as approved if provided
         if suggestion_id:
             sugg = db.session.get(ContentSuggestion, suggestion_id)
@@ -729,6 +749,11 @@ def activity_edit(activity_id):
         activity.translations_json = act_trans_json
         activity.is_active = form.is_active.data
         db.session.commit()
+
+        # Proactive mistake-catching via Admin Assistant
+        note = admin_assistant.check_admin_action_result('update', 'activity', activity.id)
+        if note:
+            session['assistant_note'] = note
 
         audit_service.log_action(
             user_id=current_user.id,
@@ -936,7 +961,7 @@ def activity_ai_draft_bulk_generate():
 
     if not clean_ids:
         flash("Please select at least one content opportunity or suggestion to draft.", "warning")
-        return redirect(url_for('admin.agents_dashboard') + '#action-center')
+        return redirect(url_for('admin.action_center'))
 
     # 4. Query pending suggestions
     suggestions = ContentSuggestion.query.filter(
@@ -949,7 +974,7 @@ def activity_ai_draft_bulk_generate():
 
     if not ordered_suggestions:
         flash("No active pending suggestions found for the selected items.", "warning")
-        return redirect(url_for('admin.agents_dashboard') + '#action-center')
+        return redirect(url_for('admin.action_center'))
 
     default_cat = Category.query.first()
     default_cat_id = default_cat.id if default_cat else 1
@@ -1432,11 +1457,8 @@ def question_delete(activity_id, question_id):
     return redirect(url_for('admin.activity_questions', activity_id=activity.id))
 
 
-@admin_bp.route('/agents')
-@login_required
-@role_required('admin')
-def agents_dashboard():
-    """System Agents read-only status, health telemetry, and orchestrator action center."""
+def _get_agents_dashboard_context():
+    """Helper to collect telemetry, metrics, and orchestrator action items for agents & action center."""
     from app.agent import scheduler, health_agent, content_integrity_agent, compliance_agent, orchestrator_agent
 
     dismissed_keys = set(session.get('orchestrator_dismissed_keys', []))
@@ -1460,18 +1482,26 @@ def agents_dashboard():
         trend_labels = [datetime.now(timezone.utc).strftime('%m/%d %H:%M')]
         trend_scores = [health_metrics['score']]
 
-    return render_template(
-        'admin/agents.html',
-        action_items=action_items,
-        dismissed_count=dismissed_count,
-        last_run=last_run,
-        health_metrics=health_metrics,
-        trend_labels_json=json.dumps(trend_labels),
-        trend_scores_json=json.dumps(trend_scores),
-        integrity_issues=integrity_issues,
-        recent_incidents_count=recent_incidents_count,
-        recent_incidents=recent_incidents
-    )
+    return {
+        'action_items': action_items,
+        'dismissed_count': dismissed_count,
+        'last_run': last_run,
+        'health_metrics': health_metrics,
+        'trend_labels_json': json.dumps(trend_labels),
+        'trend_scores_json': json.dumps(trend_scores),
+        'integrity_issues': integrity_issues,
+        'recent_incidents_count': recent_incidents_count,
+        'recent_incidents': recent_incidents
+    }
+
+
+@admin_bp.route('/agents')
+@login_required
+@role_required('admin')
+def agents_dashboard():
+    """System Agents read-only status, health telemetry, and orchestrator action center."""
+    context = _get_agents_dashboard_context()
+    return render_template('admin/agents.html', **context)
 
 
 @admin_bp.route('/agents/run', methods=['POST'])
@@ -1504,8 +1534,9 @@ def run_agents_pipeline():
 @login_required
 @role_required('admin')
 def action_center():
-    """Route alias to the Orchestrator Action Center on the System Agents dashboard."""
-    return redirect(url_for('admin.agents_dashboard') + '#action-center')
+    """Orchestrator Action Center consolidated action list."""
+    context = _get_agents_dashboard_context()
+    return render_template('admin/agents.html', **context)
 
 
 @admin_bp.route('/action-center/dismiss', methods=['POST'])
@@ -1521,7 +1552,7 @@ def action_center_dismiss():
         session['orchestrator_dismissed_keys'] = list(dismissed)
         orchestrator_agent.dismiss_action_item(item_key)
         flash("Item dismissed from Action Center view.", "info")
-    return redirect(url_for('admin.agents_dashboard') + '#action-center')
+    return redirect(url_for('admin.action_center'))
 
 
 @admin_bp.route('/action-center/bulk', methods=['POST'])
@@ -1545,7 +1576,7 @@ def action_center_bulk():
 
         if not selected_keys and not selected_suggestion_ids:
             flash("Please select at least one item to dismiss.", "warning")
-            return redirect(url_for('admin.agents_dashboard') + '#action-center')
+            return redirect(url_for('admin.action_center'))
 
         dismissed = set(session.get('orchestrator_dismissed_keys', []))
         suggestion_ids_to_dismiss = set(selected_suggestion_ids)
@@ -1605,10 +1636,10 @@ def action_center_bulk():
                 db.session.commit()
 
         flash(f"Successfully dismissed {len(selected_keys)} action item(s) / {dismissed_count} suggestion(s).", "info")
-        return redirect(url_for('admin.agents_dashboard') + '#action-center')
+        return redirect(url_for('admin.action_center'))
 
     flash("Unrecognized bulk action.", "warning")
-    return redirect(url_for('admin.agents_dashboard') + '#action-center')
+    return redirect(url_for('admin.action_center'))
 
 
 
@@ -1621,7 +1652,7 @@ def action_center_restore():
     session.pop('orchestrator_dismissed_keys', None)
     orchestrator_agent.clear_dismissed_items()
     flash("All dismissed items restored to Action Center view.", "success")
-    return redirect(url_for('admin.agents_dashboard') + '#action-center')
+    return redirect(url_for('admin.action_center'))
 
 
 # =============================================================================
@@ -1696,4 +1727,41 @@ def content_suggestions_run():
     except Exception as e:
         flash(f"Error analyzing content gaps: {str(e)}", "danger")
     return redirect(url_for('admin.content_suggestions'))
+
+
+@admin_bp.route('/assistant/chat', methods=['POST'])
+@login_required
+@role_required('admin')
+def assistant_chat():
+    """
+    Admin Assistant guidance chat endpoint.
+    Answers administrator questions using real telemetry; strictly read-only.
+    """
+    question = ''
+    if request.is_json:
+        data = request.get_json() or {}
+        question = data.get('question', '').strip()
+    else:
+        question = request.form.get('question', '').strip()
+
+    if not question:
+        return jsonify({
+            'success': False,
+            'error': "Question text is required."
+        }), 400
+
+    try:
+        result = admin_assistant.ask_assistant(question)
+        return jsonify({
+            'success': True,
+            'answer': result.get('answer', ''),
+            'links': result.get('links', []),
+            'refusal': result.get('refusal', False)
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f"Failed to get assistant response: {str(e)}"
+        }), 500
+
 

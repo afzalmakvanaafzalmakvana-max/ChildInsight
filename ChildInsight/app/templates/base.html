@@ -80,6 +80,27 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
+
+        {% if session.get('assistant_note') %}
+            {% set asst_note = session.pop('assistant_note') %}
+            <div class="alert alert-{{ asst_note.level or 'info' }} assistant-note-alert" style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-left: 4px solid var(--color-primary, #4361ee); background: rgba(67, 97, 238, 0.08); margin-bottom: 1rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <span style="font-size: 1.4rem;">🤖</span>
+                    <div>
+                        <strong style="display: inline-block; margin-right: 0.35rem;">Assistant Note:</strong>
+                        <span>{{ asst_note.note }}</span>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0;">
+                    {% if asst_note.link_url %}
+                    <a href="{{ asst_note.link_url }}" class="btn btn-sm btn-primary" style="white-space: nowrap; text-decoration: none;">
+                        {{ asst_note.link_label or 'Take Action' }} &rarr;
+                    </a>
+                    {% endif %}
+                    <button type="button" class="alert-close" style="background:none; border:none; cursor:pointer; font-size:1.2rem; color:inherit;">&times;</button>
+                </div>
+            </div>
+        {% endif %}
     </div>
 
     <!-- Main Body Content -->

@@ -4,6 +4,7 @@ from app.agent import content_suggestion_agent
 from app.agent import content_draft_agent
 from app.agent import health_agent
 from app.agent import orchestrator_agent
+from app.agent import admin_assistant
 from app.agent import scheduler
 
 __all__ = [
@@ -13,6 +14,7 @@ __all__ = [
     'content_draft_agent',
     'health_agent',
     'orchestrator_agent',
+    'admin_assistant',
     'scheduler'
 ]
 

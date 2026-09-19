@@ -319,10 +319,12 @@ class OrchestratorAgentTestCase(unittest.TestCase):
         """Admin can view the Action Center on /admin/agents and /admin/action-center."""
         self._login('admin@example.com', 'AdminPass123!')
 
-        # 1. GET /admin/action-center redirects to /admin/agents#action-center
-        res_alias = self.client.get('/admin/action-center', follow_redirects=False)
-        self.assertEqual(res_alias.status_code, 302)
-        self.assertIn('/admin/agents#action-center', res_alias.headers['Location'])
+        # 1. GET /admin/action-center renders Action Center directly (HTTP 200)
+        res_ac = self.client.get('/admin/action-center', follow_redirects=False)
+        self.assertEqual(res_ac.status_code, 200)
+        html_ac = res_ac.data.decode('utf-8')
+        self.assertIn('Action Center: Prioritized Attention List', html_ac)
+        self.assertIn('id="action-center"', html_ac)
 
         # 2. GET /admin/agents renders Action Center section
         res_agents = self.client.get('/admin/agents')
@@ -345,6 +347,45 @@ class OrchestratorAgentTestCase(unittest.TestCase):
             follow_redirects=True
         )
         self.assertEqual(res_restore.status_code, 200)
+
+    def test_action_center_nav_link_loads_populated_page(self):
+        """Action Center navbar dropdown link directly renders populated consolidated action list."""
+        self._login('admin@example.com', 'AdminPass123!')
+
+        cat = Category.query.first()
+        if not cat:
+            cat = Category(name="Sciences", slug="sciences", description="Sciences")
+            db.session.add(cat)
+            db.session.commit()
+
+        sugg = ContentSuggestion(
+            category_id=cat.id,
+            age_band='6-8',
+            suggestion_type='coverage_gap',
+            suggested_title='Planet Exploration',
+            reason='Coverage gap in 6-8',
+            priority_score=85.0,
+            status=ContentSuggestion.STATUS_PENDING
+        )
+        db.session.add(sugg)
+        db.session.commit()
+
+        # Access /admin/action-center directly as clicked from navbar
+        res = self.client.get('/admin/action-center', follow_redirects=False)
+        self.assertEqual(res.status_code, 200)
+        html = res.data.decode('utf-8')
+
+        # Verify Action Center container and populated action items are rendered
+        self.assertIn('Action Center: Prioritized Attention List', html)
+        self.assertIn('id="action-center"', html)
+        self.assertIn('btn-bulk-draft', html)
+        self.assertIn('btn-bulk-dismiss', html)
+        self.assertIn('Content Opportunity:', html)
+        self.assertIn('action-card', html)
+
+        # Verify navbar dropdown item is marked active
+        self.assertIn('admin.action_center', html)
+        self.assertIn('dropdown-item active">🎯 Action Center</a>', html)
 
     def test_non_admin_rbac_denied(self):
         """Parent, child, and guest users cannot access the Action Center or dismiss endpoints."""
