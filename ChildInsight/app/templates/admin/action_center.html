@@ -1,0 +1,445 @@
+{% extends "base_admin.html" %}
+
+{% block title %}🎯 Action Center — ChildInsight{% endblock %}
+
+{% block head_extra %}
+<style>
+.agent-badge-pill {
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.agent-badge-success { background: #DCFCE7; color: #14532D; border: 1px solid #86EFAC; }
+.agent-badge-failure { background: #FEE2E2; color: #7F1D1D; border: 1px solid #FECACA; }
+.agent-badge-skipped { background: #FEF3C7; color: #78350F; border: 1px solid #FCD34D; }
+.agent-badge-running { background: #EFF6FF; color: #1E40AF; border: 1px solid #BFDBFE; }
+.agent-badge-idle { background: #F1F5F9; color: #1E293B; border: 1px solid #CBD5E1; }
+
+.severity-high { background: #FEE2E2; color: #7F1D1D; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; border: 1px solid #FECACA; }
+.severity-medium { background: #FEF3C7; color: #78350F; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; border: 1px solid #FCD34D; }
+.severity-low { background: #EEF2FF; color: #3730A3; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; border: 1px solid #C7D2FE; }
+
+[data-theme="dark"] .agent-badge-success { background: rgba(16, 185, 129, 0.2) !important; color: #6EE7B7 !important; border-color: rgba(16, 185, 129, 0.4) !important; }
+[data-theme="dark"] .agent-badge-failure { background: rgba(239, 68, 68, 0.2) !important; color: #FECACA !important; border-color: rgba(239, 68, 68, 0.4) !important; }
+[data-theme="dark"] .agent-badge-skipped { background: rgba(245, 158, 11, 0.2) !important; color: #FDE68A !important; border-color: rgba(245, 158, 11, 0.4) !important; }
+[data-theme="dark"] .agent-badge-running { background: rgba(59, 130, 246, 0.2) !important; color: #93C5FD !important; border-color: rgba(59, 130, 246, 0.4) !important; }
+[data-theme="dark"] .agent-badge-idle { background: #334155 !important; color: #F8FAFC !important; border-color: #475569 !important; }
+[data-theme="dark"] .severity-high { background: rgba(239, 68, 68, 0.2) !important; color: #FECACA !important; border-color: rgba(239, 68, 68, 0.4) !important; }
+[data-theme="dark"] .severity-medium { background: rgba(245, 158, 11, 0.2) !important; color: #FDE68A !important; border-color: rgba(245, 158, 11, 0.4) !important; }
+[data-theme="dark"] .severity-low { background: rgba(99, 102, 241, 0.2) !important; color: #C7D2FE !important; border-color: rgba(99, 102, 241, 0.4) !important; }
+
+.action-card {
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+    padding: 1.15rem 1.35rem;
+    margin-bottom: 0.85rem;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.action-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+.action-card.tier-critical {
+    border-left: 4px solid #DC2626;
+}
+.action-card.tier-important {
+    border-left: 4px solid #D97706;
+}
+.action-card.tier-minor {
+    border-left: 4px solid #2563EB;
+}
+[data-theme="dark"] .action-card {
+    background: #1E293B;
+    border-color: #334155;
+}
+[data-theme="dark"] .action-card.tier-critical {
+    border-left-color: #EF4444;
+}
+[data-theme="dark"] .action-card.tier-important {
+    border-left-color: #F59E0B;
+}
+[data-theme="dark"] .action-card.tier-minor {
+    border-left-color: #3B82F6;
+}
+@keyframes assistant-spin {
+    to { transform: rotate(360deg); }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem;">
+    <div>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <h1>🎯 Action Center</h1>
+            <span class="agent-badge-pill agent-badge-success">Prioritized Attention</span>
+        </div>
+        <p style="color: var(--color-text-muted); margin: 0.25rem 0 0;">
+            Consolidated attention list synthesizing pending opportunities, catalog anomalies, cohort health, and safety compliance in priority order.
+        </p>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+        <a href="{{ url_for('admin.agents_dashboard') }}" class="btn btn-outline btn-sm" style="display: flex; align-items: center; gap: 0.35rem;">
+            <span>🤖</span>
+            <span>View System Agents & Platform Health</span>
+        </a>
+    </div>
+</div>
+
+<!-- Orchestrator Action Center Section -->
+<div class="card" id="action-center" style="margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <h2 style="margin: 0; font-size: 1.35rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <span>🎯</span>
+                    <span>Action Center: Prioritized Attention List</span>
+                </h2>
+                <span class="brand-badge badge-primary">{{ action_items|length }} Active</span>
+            </div>
+            <p style="color: var(--color-text-muted); font-size: 0.88rem; margin: 0.35rem 0 0;">
+                Read-only coordinator synthesizing pending content opportunities, catalog anomalies, cohort health, and safety compliance in priority order.
+            </p>
+        </div>
+        {% if dismissed_count > 0 %}
+        <div>
+            <form method="POST" action="{{ url_for('admin.action_center_restore') }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-outline btn-sm" style="font-size: 0.8rem; display: flex; align-items: center; gap: 0.35rem;">
+                    <span>🔄</span>
+                    <span>Restore {{ dismissed_count }} Dismissed Item{{ 's' if dismissed_count != 1 else '' }}</span>
+                </button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Admin Assistant Guidance Panel -->
+    <div id="admin-assistant-panel" style="background: var(--color-bg); border: 1px solid var(--color-border); border-left: 4px solid var(--color-primary, #4361ee); border-radius: 8px; padding: 1.1rem 1.25rem; margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.65rem;">
+            <div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <h3 style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 0.4rem;">
+                        <span>🤖</span>
+                        <span>Admin Assistant: Platform Guidance</span>
+                    </h3>
+                    <span class="brand-badge badge-primary" style="font-size: 0.72rem;">Advisory Only</span>
+                    <span class="agent-badge-pill agent-badge-idle" style="font-size: 0.7rem;">Never Acts</span>
+                </div>
+                <p style="color: var(--color-text-muted); font-size: 0.84rem; margin: 0.25rem 0 0;">
+                    Ask questions in plain language. The assistant explains, diagnoses, and guides using verified agent telemetry; it never modifies data or database records.
+                </p>
+            </div>
+        </div>
+
+        <!-- Suggested Quick Prompts -->
+        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.85rem;">
+            <button type="button" class="btn btn-outline btn-sm quick-prompt-btn" style="font-size: 0.76rem; padding: 0.2rem 0.6rem; border-radius: 9999px;">
+                What should I do next?
+            </button>
+            <button type="button" class="btn btn-outline btn-sm quick-prompt-btn" style="font-size: 0.76rem; padding: 0.2rem 0.6rem; border-radius: 9999px;">
+                Did I make any mistakes?
+            </button>
+            <button type="button" class="btn btn-outline btn-sm quick-prompt-btn" style="font-size: 0.76rem; padding: 0.2rem 0.6rem; border-radius: 9999px;">
+                What's wrong with the Science & Nature category?
+            </button>
+            <button type="button" class="btn btn-outline btn-sm quick-prompt-btn" style="font-size: 0.76rem; padding: 0.2rem 0.6rem; border-radius: 9999px;">
+                What is our platform health posture?
+            </button>
+        </div>
+
+        <!-- Chat Messages Log -->
+        <div id="assistant-chat-log" style="max-height: 260px; overflow-y: auto; padding: 0.75rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 0.75rem; display: flex; flex-direction: column; gap: 0.65rem;">
+            <div class="assistant-msg" style="padding: 0.6rem 0.85rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; font-size: 0.85rem; line-height: 1.5;">
+                <div style="display: flex; align-items: center; gap: 0.35rem; font-weight: 600; font-size: 0.75rem; color: var(--color-primary, #4361ee); margin-bottom: 0.2rem;">
+                    <span>🤖</span> Admin Assistant
+                </div>
+                <div>
+                    Hello! I am your read-only platform assistant. I monitor real telemetry from the Orchestrator, Content Integrity, Platform Health, and Compliance agents to help you decide what to do next. Ask me a question above or type your own below.
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Input Form -->
+        <form id="assistant-chat-form" style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="hidden" name="csrf_token" id="assistant-csrf-token" value="{{ csrf_token() }}"/>
+            <input type="text" id="assistant-query-input" placeholder="Ask a question (e.g. 'What should I do next?', 'Did I make any mistakes?')..." required style="flex: 1; padding: 0.5rem 0.8rem; font-size: 0.85rem; border-radius: 6px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text);">
+            <button type="submit" id="assistant-submit-btn" class="btn btn-primary btn-sm" style="display: flex; align-items: center; gap: 0.35rem; padding: 0.5rem 0.95rem; font-size: 0.85rem; white-space: nowrap;">
+                <span>Ask</span>
+                <span>&rarr;</span>
+            </button>
+        </form>
+        <div id="assistant-loading-indicator" style="display: none; font-size: 0.78rem; color: var(--color-text-muted); margin-top: 0.35rem;">
+            <span class="assistant-spinner" style="display: inline-block; width: 11px; height: 11px; border: 2px solid var(--color-primary, #4361ee); border-top-color: transparent; border-radius: 50%; animation: assistant-spin 0.8s linear infinite; vertical-align: middle; margin-right: 0.35rem;"></span>
+            Consulting verified agent telemetry...
+        </div>
+    </div>
+
+    {% if action_items %}
+        <form id="action-center-bulk-form" method="POST" action="{{ url_for('admin.action_center_bulk') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+            <!-- Bulk Actions Toolbar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; padding: 0.75rem 1rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 1rem;">
+                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <input type="checkbox" id="select-all-actions" aria-label="Select all action items" style="cursor: pointer; width: 17px; height: 17px;">
+                    <label for="select-all-actions" style="margin: 0; font-size: 0.85rem; font-weight: 600; cursor: pointer; user-select: none;">
+                        Select All
+                    </label>
+                    <span id="bulk-selected-counter" class="brand-badge badge-primary" style="font-size: 0.75rem; display: none;">
+                        0 selected
+                    </span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <button type="submit" name="bulk_action" value="draft" id="btn-bulk-draft" class="btn btn-primary btn-sm" disabled style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; padding: 0.4rem 0.85rem;">
+                        <span>⚡</span>
+                        <span>Generate Drafts for Selected</span>
+                    </button>
+                    <button type="submit" name="bulk_action" value="dismiss" id="btn-bulk-dismiss" class="btn btn-outline btn-sm" disabled style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; padding: 0.4rem 0.85rem; color: #DC2626; border-color: #FECACA;" onclick="return confirm('Dismiss all selected items from Action Center?');">
+                        <span>🗑️</span>
+                        <span>Dismiss Selected</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="action-items-list">
+                {% for item in action_items %}
+                <div class="action-card tier-{{ item.priority_tier|lower }}" id="action-card-{{ loop.index }}">
+                    <div style="display: flex; align-items: flex-start; gap: 0.85rem;">
+                        <div style="padding-top: 0.25rem;">
+                            <input type="checkbox"
+                                   name="selected_keys"
+                                   value="{{ item.key }}"
+                                   class="action-item-checkbox"
+                                   id="checkbox-action-{{ loop.index }}"
+                                   aria-label="Select {{ item.title }}"
+                                   style="cursor: pointer; width: 18px; height: 18px;">
+                            {% if item.meta and item.meta.suggestion_ids %}
+                                {% for sid in item.meta.suggestion_ids %}
+                                <input type="checkbox" name="selected_suggestion_ids" value="{{ sid }}" class="child-suggestion-checkbox checkbox-child-{{ loop.index }}" style="display: none;">
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                    <span class="agent-badge-pill {% if item.priority_tier == 'Critical' %}agent-badge-failure{% elif item.priority_tier == 'Important' %}agent-badge-skipped{% else %}agent-badge-running{% endif %}">
+                                        {{ item.priority_tier }} Priority
+                                    </span>
+                                    <span class="brand-badge {{ item.source_badge }}">
+                                        {{ item.source }}
+                                    </span>
+                                    {% if item.subtitle %}
+                                    <span style="font-size: 0.82rem; color: var(--color-text-muted); font-weight: 500;">
+                                        {{ item.subtitle }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <button type="submit" form="dismiss-form-{{ loop.index }}" style="background: none; border: none; font-size: 0.78rem; color: var(--color-text-muted); cursor: pointer; text-decoration: underline; padding: 0;" title="Dismiss from this view (declutter only; does not modify underlying data)">
+                                        Dismiss from view
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style="font-size: 1.05rem; font-weight: 700; color: var(--color-text-main); margin-bottom: 0.35rem;">
+                                {{ item.title }}
+                            </div>
+
+                            <p style="font-size: 0.9rem; color: var(--color-text-muted); margin: 0 0 0.85rem 0; line-height: 1.45;">
+                                {{ item.summary }}
+                            </p>
+
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <a href="{{ item.action_url }}" class="btn btn-primary btn-sm" style="font-size: 0.82rem; padding: 0.35rem 0.85rem; text-decoration: none;">
+                                    {{ item.action_label }} &rarr;
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </form>
+
+        {% for item in action_items %}
+        <form id="dismiss-form-{{ loop.index }}" method="POST" action="{{ url_for('admin.action_center_dismiss') }}" style="display: none;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="hidden" name="item_key" value="{{ item.key }}"/>
+        </form>
+        {% endfor %}
+    {% else %}
+        <div style="padding: 2rem; text-align: center; color: #16A34A; background: #F0FDF4; border-radius: 8px; border: 1px solid #DCFCE7;">
+            <div style="font-size: 2rem; margin-bottom: 0.35rem;">✓</div>
+            <strong style="font-size: 1.05rem;">All Systems Nominal — Zero Prioritized Actions Needed</strong>
+            <p style="margin: 0.35rem 0 0; font-size: 0.88rem; color: #15803D;">
+                All catalog activities are verified, content coverage is robust across all cohorts, and safety compliance is clear.
+            </p>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Action Center Bulk Selection Handlers
+    var selectAll = document.getElementById('select-all-actions');
+    var itemCheckboxes = document.querySelectorAll('.action-item-checkbox');
+    var btnBulkDraft = document.getElementById('btn-bulk-draft');
+    var btnBulkDismiss = document.getElementById('btn-bulk-dismiss');
+    var counter = document.getElementById('bulk-selected-counter');
+
+    function updateBulkUI() {
+        var checkedCount = 0;
+        itemCheckboxes.forEach(function (cb, idx) {
+            var childCbs = document.querySelectorAll('.checkbox-child-' + (idx + 1));
+            if (cb.checked) {
+                checkedCount++;
+                childCbs.forEach(function (c) { c.checked = true; });
+            } else {
+                childCbs.forEach(function (c) { c.checked = false; });
+            }
+        });
+
+        if (counter) {
+            if (checkedCount > 0) {
+                counter.style.display = 'inline-block';
+                counter.textContent = checkedCount + ' selected';
+            } else {
+                counter.style.display = 'none';
+            }
+        }
+
+        if (btnBulkDraft) btnBulkDraft.disabled = (checkedCount === 0);
+        if (btnBulkDismiss) btnBulkDismiss.disabled = (checkedCount === 0);
+
+        if (selectAll && itemCheckboxes.length > 0) {
+            selectAll.checked = (checkedCount === itemCheckboxes.length);
+            selectAll.indeterminate = (checkedCount > 0 && checkedCount < itemCheckboxes.length);
+        }
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            var checked = selectAll.checked;
+            itemCheckboxes.forEach(function (cb) {
+                cb.checked = checked;
+            });
+            updateBulkUI();
+        });
+    }
+
+    itemCheckboxes.forEach(function (cb) {
+        cb.addEventListener('change', updateBulkUI);
+    });
+
+    // Admin Assistant Chat Handler
+    (function() {
+        var form = document.getElementById('assistant-chat-form');
+        var input = document.getElementById('assistant-query-input');
+        var log = document.getElementById('assistant-chat-log');
+        var submitBtn = document.getElementById('assistant-submit-btn');
+        var loading = document.getElementById('assistant-loading-indicator');
+        var csrfInput = document.getElementById('assistant-csrf-token');
+        var quickBtns = document.querySelectorAll('.quick-prompt-btn');
+
+        if (!form || !input || !log) return;
+
+        quickBtns.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                input.value = btn.textContent.trim();
+                form.dispatchEvent(new Event('submit'));
+            });
+        });
+
+        function formatMarkdown(text) {
+            if (!text) return '';
+            var escaped = text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+
+            // Bold
+            escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            // Links: [label](url)
+            escaped = escaped.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="btn btn-sm btn-outline" style="display: inline-block; margin: 0.15rem 0.2rem; font-size: 0.76rem; padding: 0.15rem 0.5rem; text-decoration: none;">$1 &rarr;</a>');
+            // Bullets
+            escaped = escaped.replace(/^- (.*)$/gm, '<li style="margin-left: 1.1rem; margin-bottom: 0.2rem;">$1</li>');
+            // Line breaks
+            escaped = escaped.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+            return escaped;
+        }
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var question = input.value.trim();
+            if (!question) return;
+
+            // Append User Bubble
+            var userMsgDiv = document.createElement('div');
+            userMsgDiv.style.cssText = 'padding: 0.5rem 0.8rem; background: rgba(67, 97, 238, 0.1); border-radius: 8px; font-size: 0.85rem; align-self: flex-end; max-width: 85%; border: 1px solid rgba(67, 97, 238, 0.2);';
+            userMsgDiv.innerHTML = '<div style="font-weight: 600; font-size: 0.74rem; color: var(--color-primary); margin-bottom: 0.15rem;">You</div>' +
+                '<div>' + question.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+            log.appendChild(userMsgDiv);
+            log.scrollTop = log.scrollHeight;
+
+            input.value = '';
+            submitBtn.disabled = true;
+            loading.style.display = 'block';
+
+            var csrfToken = csrfInput ? csrfInput.value : '';
+
+            fetch('/admin/assistant/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ question: question })
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                submitBtn.disabled = false;
+                loading.style.display = 'none';
+
+                var asstMsgDiv = document.createElement('div');
+                asstMsgDiv.className = 'assistant-msg';
+                asstMsgDiv.style.cssText = 'padding: 0.6rem 0.85rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; font-size: 0.85rem; line-height: 1.5;';
+
+                var header = '<div style="display: flex; align-items: center; gap: 0.35rem; font-weight: 600; font-size: 0.75rem; color: var(--color-primary, #4361ee); margin-bottom: 0.2rem;">' +
+                    '<span>🤖</span> Admin Assistant' +
+                    (data.refusal ? ' <span class="agent-badge-pill agent-badge-idle" style="font-size: 0.68rem; margin-left: 0.35rem;">Advisory Boundary</span>' : '') +
+                    '</div>';
+
+                var body = '<div>' + formatMarkdown(data.answer || data.error || 'No response received.') + '</div>';
+
+                var linksHtml = '';
+                if (data.links && data.links.length > 0) {
+                    linksHtml += '<div style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.5rem; padding-top: 0.45rem; border-top: 1px dashed var(--color-border);">';
+                    data.links.forEach(function(l) {
+                        linksHtml += '<a href="' + l.url + '" class="btn btn-sm btn-primary" style="font-size: 0.74rem; padding: 0.2rem 0.55rem; text-decoration: none;">' + l.label + ' &rarr;</a>';
+                    });
+                    linksHtml += '</div>';
+                }
+
+                asstMsgDiv.innerHTML = header + body + linksHtml;
+                log.appendChild(asstMsgDiv);
+                log.scrollTop = log.scrollHeight;
+            })
+            .catch(function(err) {
+                submitBtn.disabled = false;
+                loading.style.display = 'none';
+
+                var errMsgDiv = document.createElement('div');
+                errMsgDiv.style.cssText = 'padding: 0.6rem 0.85rem; background: #FEE2E2; border: 1px solid #FECACA; color: #7F1D1D; border-radius: 8px; font-size: 0.84rem;';
+                errMsgDiv.innerHTML = '<strong>Error:</strong> Unable to reach Admin Assistant. Please try again.';
+                log.appendChild(errMsgDiv);
+                log.scrollTop = log.scrollHeight;
+            });
+        });
+    })();
+});
+</script>
+{% endblock %}

@@ -316,7 +316,7 @@ class OrchestratorAgentTestCase(unittest.TestCase):
     # 6. Admin UI & RBAC Security
     # -------------------------------------------------------------------------
     def test_admin_access_action_center(self):
-        """Admin can view the Action Center on /admin/agents and /admin/action-center."""
+        """Admin can view the Action Center on /admin/action-center and dismiss/restore items."""
         self._login('admin@example.com', 'AdminPass123!')
 
         # 1. GET /admin/action-center renders Action Center directly (HTTP 200)
@@ -326,14 +326,7 @@ class OrchestratorAgentTestCase(unittest.TestCase):
         self.assertIn('Action Center: Prioritized Attention List', html_ac)
         self.assertIn('id="action-center"', html_ac)
 
-        # 2. GET /admin/agents renders Action Center section
-        res_agents = self.client.get('/admin/agents')
-        self.assertEqual(res_agents.status_code, 200)
-        html = res_agents.data.decode('utf-8')
-        self.assertIn('Action Center: Prioritized Attention List', html)
-        self.assertIn('id="action-center"', html)
-
-        # 3. POST /admin/action-center/dismiss
+        # 2. POST /admin/action-center/dismiss
         res_dismiss = self.client.post(
             '/admin/action-center/dismiss',
             data={'item_key': 'test_dismiss_key'},
@@ -341,12 +334,55 @@ class OrchestratorAgentTestCase(unittest.TestCase):
         )
         self.assertEqual(res_dismiss.status_code, 200)
 
-        # 4. POST /admin/action-center/restore
+        # 3. POST /admin/action-center/restore
         res_restore = self.client.post(
             '/admin/action-center/restore',
             follow_redirects=True
         )
         self.assertEqual(res_restore.status_code, 200)
+
+    def test_action_center_vs_system_agents_split(self):
+        """
+        Verify Action Center and System Agents render genuinely different views:
+        - Action Center contains action list and Admin Assistant, but NOT scheduler step-status table.
+        - System Agents contains scheduler, health score, and trend view, but NOT action list or assistant chat.
+        """
+        self._login('admin@example.com', 'AdminPass123!')
+
+        # 1. Action Center (/admin/action-center)
+        res_ac = self.client.get('/admin/action-center')
+        self.assertEqual(res_ac.status_code, 200)
+        html_ac = res_ac.data.decode('utf-8')
+
+        # Should contain prioritized action list & Admin Assistant
+        self.assertIn('id="action-center"', html_ac)
+        self.assertIn('Action Center: Prioritized Attention List', html_ac)
+        self.assertIn('id="admin-assistant-panel"', html_ac)
+        self.assertIn('Admin Assistant: Platform Guidance', html_ac)
+
+        # Should NOT contain scheduler step-status table or diagnostics
+        self.assertNotIn('Scheduled Background Maintenance Runner', html_ac)
+        self.assertNotIn('agent-step-item', html_ac)
+        self.assertNotIn('healthTrendChart', html_ac)
+        self.assertNotIn('Developmental Age-Band Health & Content Breakdown', html_ac)
+
+        # 2. System Agents (/admin/agents)
+        res_ag = self.client.get('/admin/agents')
+        self.assertEqual(res_ag.status_code, 200)
+        html_ag = res_ag.data.decode('utf-8')
+
+        # Should contain scheduler, health score, trend view, and age-band breakdown
+        self.assertIn('Scheduled Background Maintenance Runner', html_ag)
+        self.assertIn('agent-step-item', html_ag)
+        self.assertIn('healthTrendChart', html_ag)
+        self.assertIn('Developmental Age-Band Health & Content Breakdown', html_ag)
+        self.assertIn('Platform Health', html_ag)
+
+        # Should NOT contain Action Center action list or Admin Assistant chat
+        self.assertNotIn('id="action-center"', html_ag)
+        self.assertNotIn('Action Center: Prioritized Attention List', html_ag)
+        self.assertNotIn('id="admin-assistant-panel"', html_ag)
+        self.assertNotIn('Admin Assistant: Platform Guidance', html_ag)
 
     def test_action_center_nav_link_loads_populated_page(self):
         """Action Center navbar dropdown link directly renders populated consolidated action list."""
@@ -384,7 +420,6 @@ class OrchestratorAgentTestCase(unittest.TestCase):
         self.assertIn('action-card', html)
 
         # Verify navbar dropdown item is marked active
-        self.assertIn('admin.action_center', html)
         self.assertIn('dropdown-item active">🎯 Action Center</a>', html)
 
     def test_non_admin_rbac_denied(self):

@@ -1457,14 +1457,24 @@ def question_delete(activity_id, question_id):
     return redirect(url_for('admin.activity_questions', activity_id=activity.id))
 
 
-def _get_agents_dashboard_context():
-    """Helper to collect telemetry, metrics, and orchestrator action items for agents & action center."""
-    from app.agent import scheduler, health_agent, content_integrity_agent, compliance_agent, orchestrator_agent
+def _get_action_center_context():
+    """Helper to collect prioritized orchestrator action items for the Action Center view."""
+    from app.agent import orchestrator_agent
 
     dismissed_keys = set(session.get('orchestrator_dismissed_keys', []))
     all_action_items = orchestrator_agent.get_action_items(dismissed_keys=dismissed_keys)
     action_items = [i for i in all_action_items if not i.get('is_dismissed')]
     dismissed_count = len(all_action_items) - len(action_items)
+
+    return {
+        'action_items': action_items,
+        'dismissed_count': dismissed_count
+    }
+
+
+def _get_agents_dashboard_context():
+    """Helper to collect telemetry, metrics, and system status for the System Agents monitoring view."""
+    from app.agent import scheduler, health_agent, content_integrity_agent, compliance_agent
 
     last_run = scheduler.get_last_run_status()
     health_metrics = health_agent.compute_health_metrics()
@@ -1483,8 +1493,6 @@ def _get_agents_dashboard_context():
         trend_scores = [health_metrics['score']]
 
     return {
-        'action_items': action_items,
-        'dismissed_count': dismissed_count,
         'last_run': last_run,
         'health_metrics': health_metrics,
         'trend_labels_json': json.dumps(trend_labels),
@@ -1499,7 +1507,7 @@ def _get_agents_dashboard_context():
 @login_required
 @role_required('admin')
 def agents_dashboard():
-    """System Agents read-only status, health telemetry, and orchestrator action center."""
+    """System Agents technical system-status, health telemetry, and scheduler monitoring."""
     context = _get_agents_dashboard_context()
     return render_template('admin/agents.html', **context)
 
@@ -1534,9 +1542,9 @@ def run_agents_pipeline():
 @login_required
 @role_required('admin')
 def action_center():
-    """Orchestrator Action Center consolidated action list."""
-    context = _get_agents_dashboard_context()
-    return render_template('admin/agents.html', **context)
+    """Orchestrator Action Center prioritized attention list and Admin Assistant."""
+    context = _get_action_center_context()
+    return render_template('admin/action_center.html', **context)
 
 
 @admin_bp.route('/action-center/dismiss', methods=['POST'])
