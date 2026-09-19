@@ -1,0 +1,740 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Bulk Review AI Activity Drafts — ChildInsight{% endblock %}
+
+{% block head_extra %}
+<style>
+.bulk-draft-card {
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-surface);
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
+}
+.bulk-draft-card.published {
+    border-color: #86EFAC;
+    background: rgba(240, 253, 244, 0.3);
+}
+.bulk-draft-card-header {
+    padding: 1.25rem 1.5rem;
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+.bulk-draft-card-body {
+    padding: 1.75rem;
+}
+.bulk-q-card {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    border-left: 3px solid var(--color-primary);
+}
+.sticky-bulk-bar {
+    position: sticky;
+    top: 1rem;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 0.85rem 1.25rem;
+    margin-bottom: 1.75rem;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+[data-theme="dark"] .sticky-bulk-bar {
+    background: rgba(30, 41, 59, 0.95);
+    border-color: #334155;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="dashboard-header" style="margin-bottom: 1.25rem;">
+    <div>
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <h1>⚡ Bulk Review AI Activity Drafts</h1>
+            <span class="badge badge-warning" id="totalDraftsBadge">{{ drafts|length }} Unsaved Drafts</span>
+            <span class="badge badge-purple">Human-in-the-Loop Approval</span>
+        </div>
+        <p style="color: var(--color-text-muted); margin: 0.35rem 0 0; font-size: 0.92rem;">
+            Generated in-memory by Content Draft Agent for selected opportunities. <strong>Nothing is saved to the database</strong> until you review and click <em>Approve & Publish</em> on each draft.
+        </p>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <a href="{{ url_for('admin.agents_dashboard') }}#action-center" class="btn btn-outline btn-sm" onclick="return confirm('Exit bulk review? Any unapproved drafts on this screen will be discarded.');">
+            ← Discard All & Return
+        </a>
+    </div>
+</div>
+
+<!-- Sticky Bulk Actions Toolbar -->
+<div class="sticky-bulk-bar">
+    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+        <span style="font-weight: 700; font-size: 0.92rem; color: var(--color-text-main);">
+            Review Progress:
+        </span>
+        <span id="bulkProgressBadge" class="brand-badge badge-primary" style="font-size: 0.82rem;">
+            0 of {{ drafts|length }} Approved
+        </span>
+        <span id="bulkRemainingNotice" style="font-size: 0.82rem; color: var(--color-text-muted);">
+            ({{ drafts|length }} remaining to review)
+        </span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <button type="button" id="btnApproveAllRemaining" class="btn btn-primary btn-sm" style="display: flex; align-items: center; gap: 0.35rem;">
+            <span>⚡</span>
+            <span id="btnApproveAllText">Approve All Remaining ({{ drafts|length }})</span>
+        </button>
+        <a href="{{ url_for('admin.activities_list') }}" id="btnDoneCatalog" class="btn btn-outline btn-sm" style="display: none;">
+            ✓ View Catalog
+        </a>
+    </div>
+</div>
+
+<div id="allDraftsContainer">
+    {% for draft in drafts %}
+    {% set draft_idx = loop.index %}
+    <div class="bulk-draft-card" id="draftCard{{ draft_idx }}" data-draft-index="{{ draft_idx }}">
+        <!-- Card Header -->
+        <div class="bulk-draft-card-header">
+            <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                <span class="badge badge-primary" style="font-size: 0.82rem;">
+                    Draft #{{ draft_idx }} of {{ drafts|length }}
+                </span>
+                <span class="brand-badge badge-info" style="font-size: 0.8rem;">
+                    {{ draft.category_name }}
+                </span>
+                <span class="brand-badge badge-neutral" style="font-size: 0.8rem;">
+                    Ages {{ draft.min_age }}-{{ draft.max_age }}
+                </span>
+                <span class="brand-badge badge-purple" style="font-size: 0.8rem;">
+                    {{ draft.difficulty }}
+                </span>
+                {% if draft.has_hindi %}
+                    <span class="badge badge-purple" style="font-size: 0.75rem;">🌐 Dual-Language (EN + HI)</span>
+                {% endif %}
+                <span class="badge badge-warning draft-status-pill" id="statusPill{{ draft_idx }}">
+                    Unsaved
+                </span>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <button type="button" class="btn btn-outline btn-sm btn-discard-single" data-draft-index="{{ draft_idx }}" style="color: #DC2626; border-color: #FECACA; font-size: 0.78rem; padding: 0.25rem 0.6rem;">
+                    🗑️ Discard Draft
+                </button>
+            </div>
+        </div>
+
+        <!-- Card Body with Form -->
+        <div class="bulk-draft-card-body">
+            <!-- Platform Grounding Banner -->
+            {% if draft.platform_context and (draft.platform_context.addressed_gap_reason or draft.platform_context.matched_tone_titles) %}
+            <div style="margin-bottom: 1.25rem; padding: 0.75rem 1rem; border-left: 3px solid var(--color-primary); background: rgba(47, 111, 237, 0.05); border-radius: 6px; font-size: 0.84rem;">
+                {% if draft.platform_context.addressed_gap_reason %}
+                    <div style="margin-bottom: 0.25rem;">
+                        <strong>💡 Addressed Gap:</strong>
+                        <span style="color: var(--color-text-main);">{{ draft.platform_context.addressed_gap_reason }}</span>
+                    </div>
+                {% endif %}
+                {% if draft.platform_context.matched_tone_titles %}
+                    <div style="color: var(--color-text-muted); font-size: 0.8rem;">
+                        Style grounded on: {{ draft.platform_context.matched_tone_titles|join(', ') }}
+                    </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <form class="bulk-draft-form" id="formDraft{{ draft_idx }}" method="POST" action="{{ url_for('admin.activity_ai_draft_publish') }}" data-draft-index="{{ draft_idx }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {% if draft.suggestion_id %}
+                    <input type="hidden" name="suggestion_id" value="{{ draft.suggestion_id }}">
+                {% endif %}
+                <input type="hidden" class="questions-json-input" name="questions_json" value="">
+
+                <!-- Title & Description Fields -->
+                {% if draft.has_hindi %}
+                    <div class="grid-2" style="gap: 1rem; margin-bottom: 1rem;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" style="font-weight: 600; font-size: 0.88rem;">
+                                Title (English) <span style="color: #DC2626;">*</span>
+                            </label>
+                            <input type="text" name="title" class="form-control field-title" value="{{ draft.title }}" required style="font-weight: 600; font-size: 0.95rem;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" style="font-weight: 600; font-size: 0.88rem;">
+                                Title (Hindi / हिंदी) <span style="color: #DC2626;">*</span>
+                            </label>
+                            <input type="text" name="hi_title" class="form-control field-hi-title" value="{{ draft.translations.hi.title if draft.translations and draft.translations.hi else '' }}" required style="font-weight: 600; font-size: 0.95rem;">
+                        </div>
+                    </div>
+
+                    <div class="grid-2" style="gap: 1rem; margin-bottom: 1.25rem;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" style="font-weight: 600; font-size: 0.88rem;">
+                                Description (English)
+                            </label>
+                            <textarea name="description" class="form-control field-desc" rows="2" style="font-size: 0.88rem;">{{ draft.description }}</textarea>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" style="font-weight: 600; font-size: 0.88rem;">
+                                Description (Hindi / हिंदी)
+                            </label>
+                            <textarea name="hi_description" class="form-control field-hi-desc" rows="2" style="font-size: 0.88rem;">{{ draft.translations.hi.description if draft.translations and draft.translations.hi else '' }}</textarea>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label class="form-label" style="font-weight: 600; font-size: 0.88rem;">
+                            Title <span style="color: #DC2626;">*</span>
+                        </label>
+                        <input type="text" name="title" class="form-control field-title" value="{{ draft.title }}" required style="font-weight: 600; font-size: 1rem;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <label class="form-label" style="font-weight: 600; font-size: 0.88rem;">Description</label>
+                        <textarea name="description" class="form-control field-desc" rows="2" style="font-size: 0.88rem;">{{ draft.description }}</textarea>
+                    </div>
+                {% endif %}
+
+                <!-- Metadata Row -->
+                <div class="grid-4" style="gap: 0.85rem; margin-bottom: 1.5rem;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" style="font-weight: 600; font-size: 0.82rem;">Category</label>
+                        <select name="category_id" class="form-control" style="font-size: 0.85rem;" required>
+                            {% for cat in categories %}
+                                <option value="{{ cat.id }}" {% if cat.id == draft.category_id %}selected{% endif %}>
+                                    {{ cat.icon }} {{ cat.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" style="font-weight: 600; font-size: 0.82rem;">Difficulty</label>
+                        <select name="difficulty" class="form-control" style="font-size: 0.85rem;" required>
+                            {% for diff in ['Beginner', 'Easy', 'Medium', 'Advanced'] %}
+                                <option value="{{ diff }}" {% if diff == draft.difficulty %}selected{% endif %}>{{ diff }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" style="font-weight: 600; font-size: 0.82rem;">Target Ages</label>
+                        <div style="display: flex; align-items: center; gap: 0.35rem;">
+                            <input type="number" name="min_age" class="form-control" value="{{ draft.min_age }}" min="4" max="14" style="width: 60px; font-size: 0.85rem;" required>
+                            <span style="font-size: 0.82rem; color: var(--color-text-muted);">to</span>
+                            <input type="number" name="max_age" class="form-control" value="{{ draft.max_age }}" min="4" max="14" style="width: 60px; font-size: 0.85rem;" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" style="font-weight: 600; font-size: 0.82rem;">Est. Minutes</label>
+                        <input type="number" name="estimated_duration" class="form-control" value="{{ draft.estimated_duration }}" min="1" max="60" style="font-size: 0.85rem;" required>
+                    </div>
+                </div>
+
+                <!-- Questions Section -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.85rem; border-top: 1px solid var(--color-border); padding-top: 1.25rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <strong style="font-size: 1rem; color: var(--color-text-main);">
+                            Questions (<span class="q-count-label" id="qCount{{ draft_idx }}">{{ draft.questions|length }}</span>)
+                        </strong>
+                        {% if draft.has_hindi %}
+                            <span class="badge badge-purple" style="font-size: 0.72rem;">Bilingual Prompts & Options</span>
+                        {% endif %}
+                    </div>
+                    <button type="button" class="btn btn-outline btn-sm btn-add-q" data-draft-index="{{ draft_idx }}" style="font-size: 0.78rem; padding: 0.25rem 0.6rem;">
+                        ➕ Add Question
+                    </button>
+                </div>
+
+                <div class="questions-container" id="questionsContainer{{ draft_idx }}">
+                    {% for q in draft.questions %}
+                        {% set q_idx = loop.index0 %}
+                        {% if draft.has_hindi and draft.translations and draft.translations.hi and draft.translations.hi.questions and draft.translations.hi.questions[q_idx] %}
+                            {% set hi_q = draft.translations.hi.questions[q_idx] %}
+                        {% else %}
+                            {% set hi_q = None %}
+                        {% endif %}
+
+                        <div class="bulk-q-card" data-q-index="{{ q_idx }}">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <span class="badge badge-primary q-number-pill" style="font-size: 0.75rem;">
+                                    Question #{{ loop.index }}
+                                </span>
+                                <button type="button" class="btn btn-outline btn-sm btn-del-q" onclick="removeBulkQuestion(this);" style="color: #DC2626; border-color: #FECACA; font-size: 0.72rem; padding: 0.15rem 0.45rem;">
+                                    ✕ Remove
+                                </button>
+                            </div>
+
+                            {% if draft.has_hindi %}
+                                <div class="grid-2" style="gap: 0.75rem; margin-bottom: 0.75rem;">
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Prompt (EN) <span style="color: #DC2626;">*</span></label>
+                                        <input type="text" class="form-control q-input-text" value="{{ q.question_text }}" required style="font-size: 0.88rem;">
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Prompt (HI) <span style="color: #DC2626;">*</span></label>
+                                        <input type="text" class="form-control q-input-hi-text" value="{{ hi_q.question_text if hi_q else '' }}" required style="font-size: 0.88rem;">
+                                    </div>
+                                </div>
+                            {% else %}
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Prompt <span style="color: #DC2626;">*</span></label>
+                                    <input type="text" class="form-control q-input-text" value="{{ q.question_text }}" required style="font-size: 0.88rem;">
+                                </div>
+                            {% endif %}
+
+                            <!-- Options Grid -->
+                            <div style="margin-bottom: 0.75rem;">
+                                <label class="form-label" style="font-size: 0.78rem; font-weight: 600; color: var(--color-text-muted); margin-bottom: 0.35rem;">
+                                    Options & Correct Answer (radio = correct):
+                                </label>
+                                <div class="grid-2 options-grid" style="gap: 0.5rem;">
+                                    {% for opt in q.options %}
+                                        {% set opt_idx = loop.index0 %}
+                                        {% set hi_opt = hi_q.options[opt_idx] if hi_q and hi_q.options and opt_idx < hi_q.options|length else '' %}
+                                        <div style="background: var(--color-surface); padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 6px;">
+                                            <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                                <input type="radio" name="q_correct_{{ draft_idx }}_{{ q_idx }}" value="{{ opt_idx }}"
+                                                       {% if opt == q.correct_answer or (loop.first and q.correct_answer not in q.options) %}checked{% endif %}
+                                                       style="width: 16px; height: 16px; cursor: pointer;" title="Mark as correct answer">
+                                                <input type="text" class="form-control q-input-opt" value="{{ opt }}" placeholder="Option {{ loop.index }} (EN)" required style="font-size: 0.85rem; padding: 0.3rem 0.5rem;">
+                                            </div>
+                                            {% if draft.has_hindi %}
+                                                <div style="margin-left: 1.4rem; margin-top: 0.3rem;">
+                                                    <input type="text" class="form-control q-input-hi-opt" value="{{ hi_opt }}" placeholder="विकल्प {{ loop.index }} (HI)" required style="font-size: 0.85rem; padding: 0.3rem 0.5rem;">
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Hints -->
+                            {% if draft.has_hindi %}
+                                <div class="grid-2" style="gap: 0.75rem;">
+                                    <div>
+                                        <input type="text" class="form-control q-input-hint" value="{{ q.hint or '' }}" placeholder="Hint (EN, optional)" style="font-size: 0.82rem; padding: 0.3rem 0.5rem;">
+                                    </div>
+                                    <div>
+                                        <input type="text" class="form-control q-input-hi-hint" value="{{ hi_q.hint if hi_q and hi_q.hint else '' }}" placeholder="संकेत (HI, optional)" style="font-size: 0.82rem; padding: 0.3rem 0.5rem;">
+                                    </div>
+                                </div>
+                            {% else %}
+                                <div>
+                                    <input type="text" class="form-control q-input-hint" value="{{ q.hint or '' }}" placeholder="Supportive Hint (optional)" style="font-size: 0.82rem; padding: 0.3rem 0.5rem;">
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Submit / Approval Footer -->
+                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--color-border); padding-top: 1.25rem; margin-top: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
+                    <div style="font-size: 0.82rem; color: var(--color-text-muted);">
+                        Clicking <strong>Approve & Publish</strong> validates questions and persists this activity immediately.
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-success btn-approve-card" id="btnApproveCard{{ draft_idx }}" style="display: flex; align-items: center; gap: 0.4rem; font-weight: 600;">
+                            <span>✓</span>
+                            <span>Approve & Publish This Activity</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Card Level Alert/Message -->
+                <div class="card-status-message" id="cardMsg{{ draft_idx }}" style="display: none; margin-top: 1rem;"></div>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var totalDrafts = {{ drafts|length }};
+    var approvedCount = 0;
+    var remainingCount = totalDrafts;
+
+    var progressBadge = document.getElementById('bulkProgressBadge');
+    var remainingNotice = document.getElementById('bulkRemainingNotice');
+    var btnApproveAll = document.getElementById('btnApproveAllRemaining');
+    var btnApproveAllText = document.getElementById('btnApproveAllText');
+    var btnDoneCatalog = document.getElementById('btnDoneCatalog');
+    var totalDraftsBadge = document.getElementById('totalDraftsBadge');
+
+    function updateProgress() {
+        if (progressBadge) {
+            progressBadge.textContent = approvedCount + ' of ' + totalDrafts + ' Approved';
+        }
+        if (remainingNotice) {
+            remainingNotice.textContent = '(' + remainingCount + ' remaining to review)';
+        }
+        if (btnApproveAllText) {
+            btnApproveAllText.textContent = 'Approve All Remaining (' + remainingCount + ')';
+        }
+        if (btnApproveAll) {
+            btnApproveAll.disabled = (remainingCount === 0);
+        }
+        if (totalDraftsBadge) {
+            totalDraftsBadge.textContent = remainingCount + ' Unsaved Drafts';
+        }
+        if (remainingCount === 0) {
+            if (btnDoneCatalog) btnDoneCatalog.style.display = 'inline-block';
+            if (progressBadge) {
+                progressBadge.className = 'brand-badge badge-success';
+                progressBadge.textContent = '✓ All ' + totalDrafts + ' Drafts Reviewed & Approved!';
+            }
+        }
+    }
+
+    // Helper to serialize questions from a card into JSON
+    function serializeQuestions(form) {
+        var card = form.closest('.bulk-draft-card');
+        var qCards = card.querySelectorAll('.bulk-q-card');
+        var hasHindi = card.querySelector('.q-input-hi-text') !== null;
+        var questions = [];
+
+        qCards.forEach(function (qCard, qIdx) {
+            var text = (qCard.querySelector('.q-input-text')?.value || '').trim();
+            var optInputs = qCard.querySelectorAll('.q-input-opt');
+            var opts = [];
+            optInputs.forEach(function (inp) {
+                var v = inp.value.trim();
+                if (v) opts.push(v);
+            });
+
+            var radios = qCard.querySelectorAll('input[type="radio"]');
+            var selectedRadioIdx = 0;
+            radios.forEach(function (r, rIdx) {
+                if (r.checked) selectedRadioIdx = rIdx;
+            });
+
+            var correct = opts[selectedRadioIdx] || opts[0] || '';
+            var hint = (qCard.querySelector('.q-input-hint')?.value || '').trim() || null;
+
+            var translations = null;
+            if (hasHindi) {
+                var hiText = (qCard.querySelector('.q-input-hi-text')?.value || '').trim();
+                var hiOptInputs = qCard.querySelectorAll('.q-input-hi-opt');
+                var hiOpts = [];
+                hiOptInputs.forEach(function (inp) {
+                    var v = inp.value.trim();
+                    if (v) hiOpts.push(v);
+                });
+                var hiCorrect = hiOpts[selectedRadioIdx] || hiOpts[0] || '';
+                var hiHint = (qCard.querySelector('.q-input-hi-hint')?.value || '').trim() || null;
+
+                if (hiText && hiOpts.length > 0) {
+                    translations = {
+                        hi: {
+                            question_text: hiText,
+                            options: hiOpts,
+                            correct_answer: hiCorrect,
+                            hint: hiHint
+                        }
+                    };
+                }
+            }
+
+            if (text && opts.length >= 2) {
+                questions.push({
+                    order_num: qIdx + 1,
+                    question_text: text,
+                    options: opts,
+                    correct_answer: correct,
+                    hint: hint,
+                    translations: translations
+                });
+            }
+        });
+
+        return questions;
+    }
+
+    // Helper to submit a single draft form via AJAX
+    function submitDraftForm(form) {
+        return new Promise(function (resolve, reject) {
+            var draftIdx = form.getAttribute('data-draft-index');
+            var card = document.getElementById('draftCard' + draftIdx);
+            var btnApprove = document.getElementById('btnApproveCard' + draftIdx);
+            var msgBox = document.getElementById('cardMsg' + draftIdx);
+            var statusPill = document.getElementById('statusPill' + draftIdx);
+
+            var questions = serializeQuestions(form);
+            if (questions.length === 0) {
+                alert('Draft #' + draftIdx + ': Please ensure at least one question has prompt text and options.');
+                return reject(new Error('No valid questions'));
+            }
+
+            var questionsInput = form.querySelector('.questions-json-input');
+            if (questionsInput) {
+                questionsInput.value = JSON.stringify(questions);
+            }
+
+            btnApprove.disabled = true;
+            btnApprove.innerHTML = '<span>⏳</span><span>Publishing...</span>';
+
+            var formData = new FormData(form);
+
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(function (res) {
+                return res.json().then(function (data) {
+                    return { status: res.status, data: data };
+                });
+            })
+            .then(function (result) {
+                if (result.status >= 200 && result.status < 300 && result.data.success) {
+                    // Mark as published
+                    card.classList.add('published');
+                    if (statusPill) {
+                        statusPill.className = 'badge badge-success';
+                        statusPill.textContent = '✓ Published (ID #' + result.data.activity_id + ')';
+                    }
+                    btnApprove.className = 'btn btn-outline btn-sm';
+                    btnApprove.innerHTML = '<span>✓</span><span>Published to Catalog</span>';
+                    btnApprove.disabled = true;
+
+                    // Disable inputs inside card to prevent accidental re-edit
+                    var inputs = form.querySelectorAll('input, select, textarea, button.btn-add-q, button.btn-del-q');
+                    inputs.forEach(function (inp) {
+                        if (inp !== btnApprove) inp.disabled = true;
+                    });
+
+                    if (msgBox) {
+                        msgBox.className = 'alert alert-success';
+                        msgBox.style.display = 'block';
+                        msgBox.innerHTML = '<strong>✓ Published Successfully!</strong> Activity "' + (result.data.title || '') + '" is now live in the catalog. <a href="/admin/activities" target="_blank" style="text-decoration: underline; margin-left: 0.5rem;">Open Catalog →</a>';
+                    }
+
+                    approvedCount++;
+                    remainingCount--;
+                    updateProgress();
+                    resolve(result.data);
+                } else {
+                    btnApprove.disabled = false;
+                    btnApprove.innerHTML = '<span>✓</span><span>Approve & Publish This Activity</span>';
+                    var errMsg = (result.data && result.data.message) ? result.data.message : 'Error publishing draft.';
+                    if (msgBox) {
+                        msgBox.className = 'alert alert-danger';
+                        msgBox.style.display = 'block';
+                        msgBox.textContent = '✕ ' + errMsg;
+                    }
+                    reject(new Error(errMsg));
+                }
+            })
+            .catch(function (err) {
+                btnApprove.disabled = false;
+                btnApprove.innerHTML = '<span>✓</span><span>Approve & Publish This Activity</span>';
+                if (msgBox) {
+                    msgBox.className = 'alert alert-danger';
+                    msgBox.style.display = 'block';
+                    msgBox.textContent = '✕ Network error: ' + err.message;
+                }
+                reject(err);
+            });
+        });
+    }
+
+    // Attach submit listener to all forms
+    var allForms = document.querySelectorAll('.bulk-draft-form');
+    allForms.forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            submitDraftForm(form);
+        });
+    });
+
+    // Discard single draft
+    var discardBtns = document.querySelectorAll('.btn-discard-single');
+    discardBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var draftIdx = btn.getAttribute('data-draft-index');
+            var card = document.getElementById('draftCard' + draftIdx);
+            var isPublished = card.classList.contains('published');
+
+            if (!isPublished) {
+                if (!confirm('Discard Draft #' + draftIdx + '? This draft will be removed from review without saving.')) {
+                    return;
+                }
+                remainingCount--;
+            }
+            card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(-10px)';
+            setTimeout(function () {
+                card.remove();
+                totalDrafts = document.querySelectorAll('.bulk-draft-card').length + approvedCount;
+                updateProgress();
+            }, 300);
+        });
+    });
+
+    // Approve all remaining sequentially
+    if (btnApproveAll) {
+        btnApproveAll.addEventListener('click', async function () {
+            var unapprovedCards = Array.from(document.querySelectorAll('.bulk-draft-card:not(.published)'));
+            if (unapprovedCards.length === 0) {
+                alert('All drafts are already approved!');
+                return;
+            }
+
+            if (!confirm('Approve and publish all ' + unapprovedCards.length + ' remaining draft(s) sequentially?')) {
+                return;
+            }
+
+            btnApproveAll.disabled = true;
+
+            for (var i = 0; i < unapprovedCards.length; i++) {
+                var c = unapprovedCards[i];
+                var f = c.querySelector('.bulk-draft-form');
+                btnApproveAll.innerHTML = '<span>⏳</span><span>Publishing ' + (i + 1) + ' of ' + unapprovedCards.length + '...</span>';
+                try {
+                    await submitDraftForm(f);
+                } catch (err) {
+                    console.error('Error in sequential approval:', err);
+                    alert('Stopped at draft due to error: ' + err.message);
+                    break;
+                }
+            }
+
+            btnApproveAll.disabled = (remainingCount === 0);
+            btnApproveAll.innerHTML = '<span>⚡</span><span>Approve All Remaining (' + remainingCount + ')</span>';
+        });
+    }
+
+    // Add question dynamically
+    var addQBtns = document.querySelectorAll('.btn-add-q');
+    addQBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var draftIdx = btn.getAttribute('data-draft-index');
+            var container = document.getElementById('questionsContainer' + draftIdx);
+            var card = document.getElementById('draftCard' + draftIdx);
+            var hasHindi = card.querySelector('.field-hi-title') !== null;
+            var currentCount = container.querySelectorAll('.bulk-q-card').length;
+            var newIdx = currentCount;
+
+            var newQ = document.createElement('div');
+            newQ.className = 'bulk-q-card';
+            newQ.setAttribute('data-q-index', newIdx);
+
+            var optsHtml = '';
+            for (var i = 0; i < 4; i++) {
+                optsHtml += `
+                    <div style="background: var(--color-surface); padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 6px;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <input type="radio" name="q_correct_${draftIdx}_${newIdx}" value="${i}" ${i === 0 ? 'checked' : ''} style="width: 16px; height: 16px; cursor: pointer;">
+                            <input type="text" class="form-control q-input-opt" placeholder="Option ${i + 1} (EN)" required style="font-size: 0.85rem; padding: 0.3rem 0.5rem;">
+                        </div>
+                        ${hasHindi ? `<div style="margin-left: 1.4rem; margin-top: 0.3rem;"><input type="text" class="form-control q-input-hi-opt" placeholder="विकल्प ${i + 1} (HI)" required style="font-size: 0.85rem; padding: 0.3rem 0.5rem;"></div>` : ''}
+                    </div>
+                `;
+            }
+
+            newQ.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                    <span class="badge badge-primary q-number-pill" style="font-size: 0.75rem;">
+                        Question #${newIdx + 1}
+                    </span>
+                    <button type="button" class="btn btn-outline btn-sm btn-del-q" onclick="removeBulkQuestion(this);" style="color: #DC2626; border-color: #FECACA; font-size: 0.72rem; padding: 0.15rem 0.45rem;">
+                        ✕ Remove
+                    </button>
+                </div>
+                ${hasHindi ? `
+                    <div class="grid-2" style="gap: 0.75rem; margin-bottom: 0.75rem;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Prompt (EN) <span style="color: #DC2626;">*</span></label>
+                            <input type="text" class="form-control q-input-text" placeholder="Enter English question prompt..." required style="font-size: 0.88rem;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Prompt (HI) <span style="color: #DC2626;">*</span></label>
+                            <input type="text" class="form-control q-input-hi-text" placeholder="हिंदी प्रश्न दर्ज करें..." required style="font-size: 0.88rem;">
+                        </div>
+                    </div>
+                ` : `
+                    <div class="form-group" style="margin-bottom: 0.75rem;">
+                        <label class="form-label" style="font-size: 0.8rem; font-weight: 600;">Prompt <span style="color: #DC2626;">*</span></label>
+                        <input type="text" class="form-control q-input-text" placeholder="Enter question prompt..." required style="font-size: 0.88rem;">
+                    </div>
+                `}
+                <div style="margin-bottom: 0.75rem;">
+                    <label class="form-label" style="font-size: 0.78rem; font-weight: 600; color: var(--color-text-muted); margin-bottom: 0.35rem;">
+                        Options & Correct Answer (radio = correct):
+                    </label>
+                    <div class="grid-2 options-grid" style="gap: 0.5rem;">
+                        ${optsHtml}
+                    </div>
+                </div>
+                ${hasHindi ? `
+                    <div class="grid-2" style="gap: 0.75rem;">
+                        <div><input type="text" class="form-control q-input-hint" placeholder="Hint (EN, optional)" style="font-size: 0.82rem; padding: 0.3rem 0.5rem;"></div>
+                        <div><input type="text" class="form-control q-input-hi-hint" placeholder="संकेत (HI, optional)" style="font-size: 0.82rem; padding: 0.3rem 0.5rem;"></div>
+                    </div>
+                ` : `
+                    <div><input type="text" class="form-control q-input-hint" placeholder="Supportive Hint (optional)" style="font-size: 0.82rem; padding: 0.3rem 0.5rem;"></div>
+                `}
+            `;
+
+            container.appendChild(newQ);
+            var qCountLabel = document.getElementById('qCount' + draftIdx);
+            if (qCountLabel) {
+                qCountLabel.textContent = container.querySelectorAll('.bulk-q-card').length;
+            }
+        });
+    });
+});
+
+window.removeBulkQuestion = function (btn) {
+    var qCard = btn.closest('.bulk-q-card');
+    var container = qCard.closest('.questions-container');
+    var card = qCard.closest('.bulk-draft-card');
+    var draftIdx = card.getAttribute('data-draft-index');
+
+    var allCards = container.querySelectorAll('.bulk-q-card');
+    if (allCards.length <= 1) {
+        alert('An activity must retain at least one question.');
+        return;
+    }
+
+    qCard.remove();
+
+    // Re-index remaining questions
+    var remainingCards = container.querySelectorAll('.bulk-q-card');
+    remainingCards.forEach(function (c, idx) {
+        var pill = c.querySelector('.q-number-pill');
+        if (pill) pill.textContent = 'Question #' + (idx + 1);
+        var radios = c.querySelectorAll('input[type="radio"]');
+        radios.forEach(function (r) {
+            r.name = 'q_correct_' + draftIdx + '_' + idx;
+        });
+    });
+
+    var qCountLabel = document.getElementById('qCount' + draftIdx);
+    if (qCountLabel) {
+        qCountLabel.textContent = remainingCards.length;
+    }
+};
+</script>
+{% endblock %}

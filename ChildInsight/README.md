@@ -619,6 +619,28 @@ ChildInsight uses standard library rotating file logs (`RotatingFileHandler`):
 
 ---
 
+## 🤖 System Agents & Orchestrator Action Center
+
+ChildInsight includes an internal system agent layer for continuous platform health, ethical compliance verification, catalog integrity, curriculum gap synthesis, and assisted content creation. System agents are deterministic rule-based validators and heuristic monitors (not general artificial intelligence).
+
+### Internal Agent Roles:
+1. **Safety & Compliance Agent (`compliance_agent.py`)**: Scans recommendation rationales, notifications, and generated content against clinical/diagnostic term blacklists in both English and Hindi. Ensures strict adherence to PRD §4 non-diagnostic vocabulary.
+2. **Content Integrity Agent (`content_integrity_agent.py`)**: Continuously audits the activity catalog for empty categories, missing questions, translation coverage gaps, or orphaned records.
+3. **Platform Health Agent (`health_agent.py`)**: Calculates 0–100 platform health and per-cohort scores from learner engagement, session completion rates, and content adequacy.
+4. **Adaptive Content Suggestion Agent (`content_suggestion_agent.py`)**: Detects curriculum bottlenecks, learner cohort progression stalls, and multilingual translation gaps grounded in real learner data.
+5. **Content Draft Agent (`content_draft_agent.py`)**: Generates calibrated bilingual educational activities and multiple-choice questions grounded in existing curriculum tone and target age bands.
+6. **Orchestrator Agent (`orchestrator_agent.py`)**: A strictly read-only coordinator that reads outputs from all agents in one pass, deduplicates and consolidates related opportunities across age bands, computes objective priority tiers (`Critical`, `Important`, `Minor`), and organizes them into an intuitive Admin Action Center (`/admin/agents#action-center`).
+
+### ⚡ Bulk Review Workflow
+Instead of reviewing and approving content suggestions or drafts one by one, the Orchestrator Action Center supports a streamlined **Bulk Review** workflow:
+- **Multi-Item Selection:** Administrators select multiple related opportunities (e.g. translation gaps across different age bands for a category) with checkboxes or "Select All".
+- **Bulk In-Memory Draft Generation:** Clicking **"Generate Drafts for Selected"** executes the Content Draft Agent for all selected items in-memory. All $N$ drafts appear together on a single unified review screen (`/admin/activities/ai-draft/bulk-generate`).
+- **Strict Human-in-the-Loop Requirement:** **Zero activities or questions are auto-saved to the database** during bulk draft generation. Suggestions remain pending until an administrator explicitly reviews and approves each item.
+- **Individual On-Page Approval:** Administrators can review and edit paired English and Hindi titles, descriptions, and questions for each draft, then click **"Approve & Publish"** to commit drafts individually via AJAX without losing peer drafts on screen. An **"Approve All Remaining"** option enables sequential publishing of all reviewed items.
+- **Bulk Dismissal:** Clicking **"Dismiss Selected"** declutters multiple items from the Action Center view in one click and marks any linked suggestions as dismissed in the database with audit logging.
+
+---
+
 ## 🏗️ Architectural Overview (Phases 1–10)
 
 ```

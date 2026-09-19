@@ -130,50 +130,98 @@
     </div>
 
     {% if action_items %}
-        <div class="action-items-list">
-            {% for item in action_items %}
-            <div class="action-card tier-{{ item.priority_tier|lower }}">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                        <span class="agent-badge-pill {% if item.priority_tier == 'Critical' %}agent-badge-failure{% elif item.priority_tier == 'Important' %}agent-badge-skipped{% else %}agent-badge-running{% endif %}">
-                            {{ item.priority_tier }} Priority
-                        </span>
-                        <span class="brand-badge {{ item.source_badge }}">
-                            {{ item.source }}
-                        </span>
-                        {% if item.subtitle %}
-                        <span style="font-size: 0.82rem; color: var(--color-text-muted); font-weight: 500;">
-                            {{ item.subtitle }}
-                        </span>
-                        {% endif %}
-                    </div>
-                    <div>
-                        <form method="POST" action="{{ url_for('admin.action_center_dismiss') }}" style="display: inline;">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                            <input type="hidden" name="item_key" value="{{ item.key }}"/>
-                            <button type="submit" style="background: none; border: none; font-size: 0.78rem; color: var(--color-text-muted); cursor: pointer; text-decoration: underline; padding: 0;" title="Dismiss from this view (declutter only; does not modify underlying data)">
-                                Dismiss from view
-                            </button>
-                        </form>
-                    </div>
+        <form id="action-center-bulk-form" method="POST" action="{{ url_for('admin.action_center_bulk') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+            <!-- Bulk Actions Toolbar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; padding: 0.75rem 1rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 1rem;">
+                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <input type="checkbox" id="select-all-actions" aria-label="Select all action items" style="cursor: pointer; width: 17px; height: 17px;">
+                    <label for="select-all-actions" style="margin: 0; font-size: 0.85rem; font-weight: 600; cursor: pointer; user-select: none;">
+                        Select All
+                    </label>
+                    <span id="bulk-selected-counter" class="brand-badge badge-primary" style="font-size: 0.75rem; display: none;">
+                        0 selected
+                    </span>
                 </div>
-
-                <div style="font-size: 1.05rem; font-weight: 700; color: var(--color-text-main); margin-bottom: 0.35rem;">
-                    {{ item.title }}
-                </div>
-
-                <p style="font-size: 0.9rem; color: var(--color-text-muted); margin: 0 0 0.85rem 0; line-height: 1.45;">
-                    {{ item.summary }}
-                </p>
-
-                <div style="display: flex; align-items: center; gap: 0.75rem;">
-                    <a href="{{ item.action_url }}" class="btn btn-primary btn-sm" style="font-size: 0.82rem; padding: 0.35rem 0.85rem; text-decoration: none;">
-                        {{ item.action_label }} &rarr;
-                    </a>
+                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <button type="submit" name="bulk_action" value="draft" id="btn-bulk-draft" class="btn btn-primary btn-sm" disabled style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; padding: 0.4rem 0.85rem;">
+                        <span>⚡</span>
+                        <span>Generate Drafts for Selected</span>
+                    </button>
+                    <button type="submit" name="bulk_action" value="dismiss" id="btn-bulk-dismiss" class="btn btn-outline btn-sm" disabled style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; padding: 0.4rem 0.85rem; color: #DC2626; border-color: #FECACA;" onclick="return confirm('Dismiss all selected items from Action Center?');">
+                        <span>🗑️</span>
+                        <span>Dismiss Selected</span>
+                    </button>
                 </div>
             </div>
-            {% endfor %}
-        </div>
+
+            <div class="action-items-list">
+                {% for item in action_items %}
+                <div class="action-card tier-{{ item.priority_tier|lower }}" id="action-card-{{ loop.index }}">
+                    <div style="display: flex; align-items: flex-start; gap: 0.85rem;">
+                        <div style="padding-top: 0.25rem;">
+                            <input type="checkbox"
+                                   name="selected_keys"
+                                   value="{{ item.key }}"
+                                   class="action-item-checkbox"
+                                   id="checkbox-action-{{ loop.index }}"
+                                   aria-label="Select {{ item.title }}"
+                                   style="cursor: pointer; width: 18px; height: 18px;">
+                            {% if item.meta and item.meta.suggestion_ids %}
+                                {% for sid in item.meta.suggestion_ids %}
+                                <input type="checkbox" name="selected_suggestion_ids" value="{{ sid }}" class="child-suggestion-checkbox checkbox-child-{{ loop.index }}" style="display: none;">
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                    <span class="agent-badge-pill {% if item.priority_tier == 'Critical' %}agent-badge-failure{% elif item.priority_tier == 'Important' %}agent-badge-skipped{% else %}agent-badge-running{% endif %}">
+                                        {{ item.priority_tier }} Priority
+                                    </span>
+                                    <span class="brand-badge {{ item.source_badge }}">
+                                        {{ item.source }}
+                                    </span>
+                                    {% if item.subtitle %}
+                                    <span style="font-size: 0.82rem; color: var(--color-text-muted); font-weight: 500;">
+                                        {{ item.subtitle }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <button type="submit" form="dismiss-form-{{ loop.index }}" style="background: none; border: none; font-size: 0.78rem; color: var(--color-text-muted); cursor: pointer; text-decoration: underline; padding: 0;" title="Dismiss from this view (declutter only; does not modify underlying data)">
+                                        Dismiss from view
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style="font-size: 1.05rem; font-weight: 700; color: var(--color-text-main); margin-bottom: 0.35rem;">
+                                {{ item.title }}
+                            </div>
+
+                            <p style="font-size: 0.9rem; color: var(--color-text-muted); margin: 0 0 0.85rem 0; line-height: 1.45;">
+                                {{ item.summary }}
+                            </p>
+
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <a href="{{ item.action_url }}" class="btn btn-primary btn-sm" style="font-size: 0.82rem; padding: 0.35rem 0.85rem; text-decoration: none;">
+                                    {{ item.action_label }} &rarr;
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </form>
+
+        {% for item in action_items %}
+        <form id="dismiss-form-{{ loop.index }}" method="POST" action="{{ url_for('admin.action_center_dismiss') }}" style="display: none;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="hidden" name="item_key" value="{{ item.key }}"/>
+        </form>
+        {% endfor %}
     {% else %}
         <div style="padding: 2rem; text-align: center; color: #16A34A; background: #F0FDF4; border-radius: 8px; border: 1px solid #DCFCE7;">
             <div style="font-size: 2rem; margin-bottom: 0.35rem;">✓</div>
@@ -477,52 +525,104 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // Platform Health Trend Chart
     var ctx = document.getElementById('healthTrendChart');
-    if (!ctx) return;
+    if (ctx) {
+        var labels = {{ trend_labels_json|safe }};
+        var data = {{ trend_scores_json|safe }};
 
-    var labels = {{ trend_labels_json|safe }};
-    var data = {{ trend_scores_json|safe }};
-
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Health Score (0-100)',
-                data: data,
-                borderColor: '#2563EB',
-                backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                borderWidth: 2,
-                tension: 0.3,
-                fill: true,
-                pointRadius: 4,
-                pointBackgroundColor: '#2563EB'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    min: 0,
-                    max: 100,
-                    ticks: { stepSize: 20 }
-                },
-                x: {
-                    grid: { display: false }
-                }
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Health Score (0-100)',
+                    data: data,
+                    borderColor: '#2563EB',
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#2563EB'
+                }]
             },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return ' Health Score: ' + context.parsed.y + ' / 100';
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 100,
+                        ticks: { stepSize: 20 }
+                    },
+                    x: {
+                        grid: { display: false }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return ' Health Score: ' + context.parsed.y + ' / 100';
+                            }
                         }
                     }
                 }
             }
+        });
+    }
+
+    // Action Center Bulk Selection Handlers
+    var selectAll = document.getElementById('select-all-actions');
+    var itemCheckboxes = document.querySelectorAll('.action-item-checkbox');
+    var btnBulkDraft = document.getElementById('btn-bulk-draft');
+    var btnBulkDismiss = document.getElementById('btn-bulk-dismiss');
+    var counter = document.getElementById('bulk-selected-counter');
+
+    function updateBulkUI() {
+        var checkedCount = 0;
+        itemCheckboxes.forEach(function (cb, idx) {
+            var childCbs = document.querySelectorAll('.checkbox-child-' + (idx + 1));
+            if (cb.checked) {
+                checkedCount++;
+                childCbs.forEach(function (c) { c.checked = true; });
+            } else {
+                childCbs.forEach(function (c) { c.checked = false; });
+            }
+        });
+
+        if (counter) {
+            if (checkedCount > 0) {
+                counter.style.display = 'inline-block';
+                counter.textContent = checkedCount + ' selected';
+            } else {
+                counter.style.display = 'none';
+            }
         }
+
+        if (btnBulkDraft) btnBulkDraft.disabled = (checkedCount === 0);
+        if (btnBulkDismiss) btnBulkDismiss.disabled = (checkedCount === 0);
+
+        if (selectAll && itemCheckboxes.length > 0) {
+            selectAll.checked = (checkedCount === itemCheckboxes.length);
+            selectAll.indeterminate = (checkedCount > 0 && checkedCount < itemCheckboxes.length);
+        }
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            var checked = selectAll.checked;
+            itemCheckboxes.forEach(function (cb) {
+                cb.checked = checked;
+            });
+            updateBulkUI();
+        });
+    }
+
+    itemCheckboxes.forEach(function (cb) {
+        cb.addEventListener('change', updateBulkUI);
     });
 });
 </script>

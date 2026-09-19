@@ -1,7 +1,7 @@
 import json
 import re
 from datetime import datetime, timezone
-from flask import Blueprint, render_template, redirect, url_for, flash, request, session
+from flask import Blueprint, render_template, redirect, url_for, flash, request, session, jsonify
 from flask_login import login_required, current_user
 from app import db
 from app.models.user import User
@@ -16,6 +16,7 @@ from app.forms.admin import AssignTeacherForm, ChangeRoleForm, CategoryForm, Act
 from app.services import audit_service
 from app.agent import compliance_agent
 from app.utils.decorators import role_required
+from app.routes.auth import is_safe_redirect_url
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -871,6 +872,111 @@ def activity_ai_draft_generate():
     )
 
 
+@admin_bp.route('/activities/ai-draft/bulk-generate', methods=['POST'])
+@login_required
+@role_required('admin')
+def activity_ai_draft_bulk_generate():
+    """
+    Triggers ContentDraftAgent to generate multiple grounded activity drafts (unsaved).
+    Takes suggestion_ids or selected_suggestion_ids or selected_keys.
+    Renders admin/activity_bulk_draft_review.html displaying all drafts on one screen.
+    STRICTLY ZERO DATABASE COMMITS ARE MADE IN THIS ROUTE.
+    """
+    from app.agent import content_draft_agent
+
+    # 1. Collect suggestion IDs from various form inputs
+    suggestion_ids = request.form.getlist('suggestion_ids', type=int)
+    suggestion_ids += request.form.getlist('selected_suggestion_ids', type=int)
+
+    raw_ids = request.form.get('suggestion_ids', '')
+    if raw_ids and isinstance(raw_ids, str):
+        try:
+            for piece in raw_ids.split(','):
+                piece = piece.strip()
+                if piece.isdigit():
+                    suggestion_ids.append(int(piece))
+        except Exception:
+            pass
+
+    # 2. Check if selected_keys were passed (e.g. from Action Center)
+    selected_keys = request.form.getlist('selected_keys')
+    for key in selected_keys:
+        if key.startswith('suggestion_cat_'):
+            try:
+                cat_id = int(key.split('_')[-1])
+                cat_suggs = ContentSuggestion.query.filter_by(
+                    category_id=cat_id,
+                    status=ContentSuggestion.STATUS_PENDING
+                ).all()
+                suggestion_ids.extend([s.id for s in cat_suggs])
+            except (ValueError, IndexError):
+                pass
+        elif key.startswith('suggestion_id_'):
+            try:
+                s_id = int(key.split('_')[-1])
+                suggestion_ids.append(s_id)
+            except (ValueError, IndexError):
+                pass
+        elif key.startswith('suggestion_topic_'):
+            topic_slug = key.replace('suggestion_topic_', '')
+            pending_all = ContentSuggestion.query.filter_by(status=ContentSuggestion.STATUS_PENDING).all()
+            for s in pending_all:
+                s_topic = s.suggested_title or s.suggestion_type
+                s_slug = re.sub(r'[^a-zA-Z0-9]+', '_', s_topic).strip('_').lower()
+                if s_slug == topic_slug:
+                    suggestion_ids.append(s.id)
+
+    # 3. Deduplicate while preserving order
+    clean_ids = []
+    seen = set()
+    for sid in suggestion_ids:
+        if sid and sid not in seen:
+            seen.add(sid)
+            clean_ids.append(sid)
+
+    if not clean_ids:
+        flash("Please select at least one content opportunity or suggestion to draft.", "warning")
+        return redirect(url_for('admin.agents_dashboard') + '#action-center')
+
+    # 4. Query pending suggestions
+    suggestions = ContentSuggestion.query.filter(
+        ContentSuggestion.id.in_(clean_ids),
+        ContentSuggestion.status == ContentSuggestion.STATUS_PENDING
+    ).all()
+
+    id_map = {s.id: s for s in suggestions}
+    ordered_suggestions = [id_map[sid] for sid in clean_ids if sid in id_map]
+
+    if not ordered_suggestions:
+        flash("No active pending suggestions found for the selected items.", "warning")
+        return redirect(url_for('admin.agents_dashboard') + '#action-center')
+
+    default_cat = Category.query.first()
+    default_cat_id = default_cat.id if default_cat else 1
+
+    # 5. Generate drafts in-memory (ZERO DB COMMITS)
+    drafts = []
+    for sugg in ordered_suggestions:
+        cat_id = sugg.category_id or default_cat_id
+        age_band = sugg.age_band or '6-9'
+        difficulty = sugg.target_difficulty or 'Easy'
+
+        draft = content_draft_agent.generate_draft_activity(
+            category_id=cat_id,
+            age_band=age_band,
+            difficulty=difficulty,
+            suggestion_id=sugg.id
+        )
+        drafts.append(draft)
+
+    categories = Category.query.order_by(Category.name.asc()).all()
+    return render_template(
+        'admin/activity_bulk_draft_review.html',
+        drafts=drafts,
+        categories=categories
+    )
+
+
 @admin_bp.route('/activities/ai-draft/publish', methods=['POST'])
 @login_required
 @role_required('admin')
@@ -878,7 +984,10 @@ def activity_ai_draft_publish():
     """
     Persists reviewed and approved AI draft to the database.
     This is the ONLY route where drafted content is committed.
+    Supports both standard form submission and AJAX/JSON responses.
     """
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', '') or request.is_json
+
     category_id = request.form.get('category_id', type=int)
     title = request.form.get('title', '').strip()
     description = request.form.get('description', '').strip() or None
@@ -889,11 +998,15 @@ def activity_ai_draft_publish():
     suggestion_id = request.form.get('suggestion_id', type=int)
 
     if not title:
+        if is_ajax:
+            return jsonify({'success': False, 'message': 'Activity title is required.'}), 400
         flash("Activity title is required.", "danger")
         return redirect(url_for('admin.activities_list'))
 
     category = db.session.get(Category, category_id)
     if not category:
+        if is_ajax:
+            return jsonify({'success': False, 'message': 'Invalid category selected.'}), 400
         flash("Invalid category selected.", "danger")
         return redirect(url_for('admin.activities_list'))
 
@@ -936,6 +1049,8 @@ def activity_ai_draft_publish():
             idx += 1
 
     if not questions:
+        if is_ajax:
+            return jsonify({'success': False, 'message': 'At least one question is required to publish an activity.'}), 400
         flash("At least one question is required to publish an activity.", "danger")
         return redirect(url_for('admin.activities_list'))
 
@@ -1002,7 +1117,20 @@ def activity_ai_draft_publish():
         target_id=activity.id
     )
 
-    flash(f"Activity '{activity.title}' approved and published successfully with {len(questions)} questions!", "success")
+    msg = f"Activity '{activity.title}' approved and published successfully with {len(questions)} questions!"
+    flash(msg, "success")
+
+    if is_ajax:
+        return jsonify({
+            'success': True,
+            'message': msg,
+            'activity_id': activity.id,
+            'title': activity.title
+        })
+
+    return_to = request.form.get('return_to')
+    if return_to and is_safe_redirect_url(return_to, current_user.role):
+        return redirect(return_to)
     return redirect(url_for('admin.activities_list'))
 
 
@@ -1394,6 +1522,94 @@ def action_center_dismiss():
         orchestrator_agent.dismiss_action_item(item_key)
         flash("Item dismissed from Action Center view.", "info")
     return redirect(url_for('admin.agents_dashboard') + '#action-center')
+
+
+@admin_bp.route('/action-center/bulk', methods=['POST'])
+@login_required
+@role_required('admin')
+def action_center_bulk():
+    """
+    Handles bulk operations from the Orchestrator Action Center:
+    - 'draft': forwards to activity_ai_draft_bulk_generate()
+    - 'dismiss': bulk dismisses selected items and any linked ContentSuggestions
+    """
+    from app.agent import orchestrator_agent
+    bulk_action = request.form.get('bulk_action', 'draft').strip()
+
+    if bulk_action == 'draft':
+        return activity_ai_draft_bulk_generate()
+
+    elif bulk_action == 'dismiss':
+        selected_keys = request.form.getlist('selected_keys')
+        selected_suggestion_ids = request.form.getlist('selected_suggestion_ids', type=int)
+
+        if not selected_keys and not selected_suggestion_ids:
+            flash("Please select at least one item to dismiss.", "warning")
+            return redirect(url_for('admin.agents_dashboard') + '#action-center')
+
+        dismissed = set(session.get('orchestrator_dismissed_keys', []))
+        suggestion_ids_to_dismiss = set(selected_suggestion_ids)
+
+        for key in selected_keys:
+            key_str = str(key).strip()
+            if not key_str:
+                continue
+            dismissed.add(key_str)
+            orchestrator_agent.dismiss_action_item(key_str)
+
+            if key_str.startswith('suggestion_cat_'):
+                try:
+                    cat_id = int(key_str.split('_')[-1])
+                    cat_suggs = ContentSuggestion.query.filter_by(
+                        category_id=cat_id,
+                        status=ContentSuggestion.STATUS_PENDING
+                    ).all()
+                    for s in cat_suggs:
+                        suggestion_ids_to_dismiss.add(s.id)
+                except (ValueError, IndexError):
+                    pass
+            elif key_str.startswith('suggestion_id_'):
+                try:
+                    s_id = int(key_str.split('_')[-1])
+                    suggestion_ids_to_dismiss.add(s_id)
+                except (ValueError, IndexError):
+                    pass
+            elif key_str.startswith('suggestion_topic_'):
+                topic_slug = key_str.replace('suggestion_topic_', '')
+                pending_all = ContentSuggestion.query.filter_by(status=ContentSuggestion.STATUS_PENDING).all()
+                for s in pending_all:
+                    s_topic = s.suggested_title or s.suggestion_type
+                    s_slug = re.sub(r'[^a-zA-Z0-9]+', '_', s_topic).strip('_').lower()
+                    if s_slug == topic_slug:
+                        suggestion_ids_to_dismiss.add(s.id)
+
+        session['orchestrator_dismissed_keys'] = list(dismissed)
+
+        # Update suggestions in database to STATUS_DISMISSED if any
+        dismissed_count = 0
+        if suggestion_ids_to_dismiss:
+            suggs = ContentSuggestion.query.filter(
+                ContentSuggestion.id.in_(list(suggestion_ids_to_dismiss)),
+                ContentSuggestion.status == ContentSuggestion.STATUS_PENDING
+            ).all()
+            for s in suggs:
+                s.status = ContentSuggestion.STATUS_DISMISSED
+                dismissed_count += 1
+                audit_service.log_action(
+                    user_id=current_user.id,
+                    action='dismiss_content_suggestion',
+                    target_type='content_suggestion',
+                    target_id=s.id
+                )
+            if dismissed_count > 0:
+                db.session.commit()
+
+        flash(f"Successfully dismissed {len(selected_keys)} action item(s) / {dismissed_count} suggestion(s).", "info")
+        return redirect(url_for('admin.agents_dashboard') + '#action-center')
+
+    flash("Unrecognized bulk action.", "warning")
+    return redirect(url_for('admin.agents_dashboard') + '#action-center')
+
 
 
 @admin_bp.route('/action-center/restore', methods=['POST'])
