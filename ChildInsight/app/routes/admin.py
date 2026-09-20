@@ -1,7 +1,7 @@
 import json
 import re
 from datetime import datetime, timezone
-from flask import Blueprint, render_template, redirect, url_for, flash, request, session, jsonify
+from flask import Blueprint, render_template, redirect, url_for, flash, request, session, jsonify, current_app
 from flask_login import login_required, current_user
 from app import db
 from app.models.user import User
@@ -1790,7 +1790,7 @@ def assistant_chat():
             'detected_language': result.get('detected_language', 'en')
         })
     except Exception as e:
-        logger.exception("Failed to get assistant response: %s", e)
+        current_app.logger.exception("Failed to get assistant response: %s", e)
         return jsonify({
             'success': False,
             'error': f"Failed to get assistant response: {str(e)}"

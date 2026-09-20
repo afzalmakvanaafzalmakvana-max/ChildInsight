@@ -402,6 +402,17 @@ def _match_category_in_query(question: str, categories: List[Dict[str, Any]]) ->
             if kw in q_lower:
                 return cat
 
+    # Also detect Science & Nature even if not yet created in the catalog
+    if any(kw in q_lower for kw in CATEGORY_KEYWORDS.get('science-nature', [])):
+        return {
+            'id': None,
+            'name': 'Science & Nature',
+            'slug': 'science-nature',
+            'activity_count': 0,
+            'has_hindi': False,
+            'uncreated': True
+        }
+
     return None
 
 
@@ -444,61 +455,85 @@ def _generate_grounded_fallback_answer(
             matched_cat = _extract_category_from_history(history, categories)
 
     if matched_cat:
-        cat_id = matched_cat['id']
+        cat_id = matched_cat.get('id')
         cat_name = matched_cat['name']
         act_count = matched_cat['activity_count']
         has_hi = matched_cat['has_hindi']
+        is_uncreated = matched_cat.get('uncreated', False)
 
         # Find matching action items or suggestions
         cat_items = [
             item for item in context.get('action_items', [])
-            if item.get('meta', {}).get('category_id') == cat_id or cat_name.lower() in item.get('title', '').lower()
+            if (cat_id and item.get('meta', {}).get('category_id') == cat_id) or cat_name.lower() in item.get('title', '').lower()
         ]
-        cat_suggestions = [s for s in context.get('pending_suggestions', []) if s.get('category_id') == cat_id]
+        cat_suggestions = [
+            s for s in context.get('pending_suggestions', [])
+            if (cat_id and s.get('category_id') == cat_id) or (is_uncreated and ('science' in s.get('category_name', '').lower() or 'nature' in s.get('category_name', '').lower()))
+        ]
 
         if is_hindi:
-            status_lines = [
-                f"श्रेणी **'{cat_name}'** की वर्तमान स्थिति:",
-                f"- **सक्रिय गतिविधियां**: {act_count} गतिविधियां",
-                f"- **हिंदी अनुवाद**: {'उपलब्ध है' if has_hi else 'हिंदी नाम/विवरण अनुपलब्ध है'}",
-                f"- **लंबित सामग्री सुझाव**: {len(cat_suggestions)} सुझाव"
-            ]
-
-            if cat_items:
-                status_lines.append("\n**सक्रिय एक्शन सेंटर कार्य:**")
-                for item in cat_items:
-                    status_lines.append(f"- [{item['priority_tier']}] {item['summary']}")
-                    relevant_links.append({'label': item['action_label'], 'url': item['action_url']})
-            elif act_count == 0:
-                status_lines.append(f"\nइस श्रेणी में **0 गतिविधियां** हैं। बच्चे इसमें तब तक नहीं खेल सकते जब तक गतिविधियां जोड़ी न जाएं।")
-                relevant_links.append({'label': f"{cat_name} में गतिविधि जोड़ें", 'url': f"/admin/activities/new?category_id={cat_id}"})
+            if is_uncreated:
+                status_lines = [
+                    f"श्रेणी **'{cat_name}' (विज्ञान और प्रकृति)** की स्थिति:",
+                    f"- **सक्रिय गतिविधियां**: 0 (श्रेणी अभी तक कैटलॉग में नहीं जोड़ी गई है)",
+                    f"- **लंबित सामग्री सुझाव**: {len(cat_suggestions)} सुझाव",
+                    f"\nयह श्रेणी अभी तक नहीं बनाई गई है। आप [नई श्रेणी बनाएं](/admin/categories/new) से इसे जोड़ सकते हैं।"
+                ]
+                relevant_links.append(ADMIN_LINKS['new_category'])
             else:
-                status_lines.append(f"\n'{cat_name}' श्रेणी में कोई सक्रिय विसंगति या महत्वपूर्ण कमी नहीं पाई गई है।")
+                status_lines = [
+                    f"श्रेणी **'{cat_name}'** की वर्तमान स्थिति:",
+                    f"- **सक्रिय गतिविधियां**: {act_count} गतिविधियां",
+                    f"- **हिंदी अनुवाद**: {'उपलब्ध है' if has_hi else 'हिंदी नाम/विवरण अनुपलब्ध है'}",
+                    f"- **लंबित सामग्री सुझाव**: {len(cat_suggestions)} सुझाव"
+                ]
+
+                if cat_items:
+                    status_lines.append("\n**सक्रिय एक्शन सेंटर कार्य:**")
+                    for item in cat_items:
+                        status_lines.append(f"- [{item['priority_tier']}] {item['summary']}")
+                        relevant_links.append({'label': item['action_label'], 'url': item['action_url']})
+                elif act_count == 0:
+                    status_lines.append(f"\nइस श्रेणी में **0 गतिविधियां** हैं। बच्चे इसमें तब तक नहीं खेल सकते जब तक गतिविधियां जोड़ी न जाएं।")
+                    relevant_links.append({'label': f"{cat_name} में गतिविधि जोड़ें", 'url': f"/admin/activities/new?category_id={cat_id}"})
+                else:
+                    status_lines.append(f"\n'{cat_name}' श्रेणी में कोई सक्रिय विसंगति या महत्वपूर्ण कमी नहीं पाई गई है।")
+
+                relevant_links.append({'label': f"{cat_name} गतिविधियां प्रबंधित करें", 'url': f"/admin/activities?category_id={cat_id}"})
 
             answer = "\n".join(status_lines)
-            relevant_links.append({'label': f"{cat_name} गतिविधियां प्रबंधित करें", 'url': f"/admin/activities?category_id={cat_id}"})
             relevant_links.append(ADMIN_LINKS['categories'])
         else:
-            status_lines = [
-                f"Status for category **'{cat_name}'**:",
-                f"- **Activity Count**: {act_count} active activities",
-                f"- **Hindi Category Translation**: {'Present' if has_hi else 'Missing Hindi name/description'}",
-                f"- **Pending Content Suggestions**: {len(cat_suggestions)} suggestion(s)"
-            ]
-
-            if cat_items:
-                status_lines.append("\n**Active Action Center Items:**")
-                for item in cat_items:
-                    status_lines.append(f"- [{item['priority_tier']}] {item['summary']}")
-                    relevant_links.append({'label': item['action_label'], 'url': item['action_url']})
-            elif act_count == 0:
-                status_lines.append(f"\nThis category has **0 activities**. Children cannot see or play in this category until activities are added.")
-                relevant_links.append({'label': f"Add Activity to {cat_name}", 'url': f"/admin/activities/new?category_id={cat_id}"})
+            if is_uncreated:
+                status_lines = [
+                    f"Status for category **'{cat_name}'**:",
+                    f"- **Activity Count**: 0 active activities (Category not yet created in catalog)",
+                    f"- **Pending Content Suggestions**: {len(cat_suggestions)} suggestion(s)",
+                    f"\nThis category has not been created yet in the catalog. You can add it directly at [Create Category](/admin/categories/new)."
+                ]
+                relevant_links.append(ADMIN_LINKS['new_category'])
             else:
-                status_lines.append(f"\nNo active anomalies or critical gaps were flagged for '{cat_name}'.")
+                status_lines = [
+                    f"Status for category **'{cat_name}'**:",
+                    f"- **Activity Count**: {act_count} active activities",
+                    f"- **Hindi Category Translation**: {'Present' if has_hi else 'Missing Hindi name/description'}",
+                    f"- **Pending Content Suggestions**: {len(cat_suggestions)} suggestion(s)"
+                ]
+
+                if cat_items:
+                    status_lines.append("\n**Active Action Center Items:**")
+                    for item in cat_items:
+                        status_lines.append(f"- [{item['priority_tier']}] {item['summary']}")
+                        relevant_links.append({'label': item['action_label'], 'url': item['action_url']})
+                elif act_count == 0:
+                    status_lines.append(f"\nThis category has **0 activities**. Children cannot see or play in this category until activities are added.")
+                    relevant_links.append({'label': f"Add Activity to {cat_name}", 'url': f"/admin/activities/new?category_id={cat_id}"})
+                else:
+                    status_lines.append(f"\nNo active anomalies or critical gaps were flagged for '{cat_name}'.")
+
+                relevant_links.append({'label': f"Manage {cat_name} Activities", 'url': f"/admin/activities?category_id={cat_id}"})
 
             answer = "\n".join(status_lines)
-            relevant_links.append({'label': f"Manage {cat_name} Activities", 'url': f"/admin/activities?category_id={cat_id}"})
             relevant_links.append(ADMIN_LINKS['categories'])
 
     # -------------------------------------------------------------------------
@@ -549,11 +584,11 @@ def _generate_grounded_fallback_answer(
             answer = (
                 "ChildInsight की **अनुशंसा और अनुकूलन प्रणाली (Recommendation Engine)** एक 3-स्तरीय डिज़ाइन पर काम करती है:\n\n"
                 "1. **स्तर 1: नियम-आधारित श्रेणी सटीकता (Rule-Based Accuracy Thresholds)**:\n"
-                "   - $\\ge 80\\%$ सटीकता: स्तर आगे बढ़ाती है (Beginner $\\to$ Easy $\\to$ Medium $\\to$ Advanced)।\n"
-                "   - $< 50\\%$ सटीकता: मूलभूत समझ मजबूत करने के लिए स्तर घटाती है या अभ्यास गतिविधियां सुझाती है।\n"
-                "   - $50\\% - 79\\%$ सटीकता: वर्तमान स्तर पर सुदृढ़ीकरण बनाए रखती है।\n\n"
+                "   - 80% या अधिक सटीकता (>= 80%): स्तर आगे बढ़ाती है (Beginner -> Easy -> Medium -> Advanced)।\n"
+                "   - 50% से कम सटीकता (< 50%): मूलभूत समझ मजबूत करने के लिए स्तर घटाती है या अभ्यास गतिविधियां सुझाती है।\n"
+                "   - 50% - 79% सटीकता: वर्तमान स्तर पर सुदृढ़ीकरण बनाए रखती है।\n\n"
                 "2. **स्तर 2: सहनशक्ति और पूर्णता अंशांकन (Stamina & Completion Calibration)**:\n"
-                "   - यदि बच्चे की सटीकता उच्च है लेकिन सत्र पूर्णता दर $< 50\\%$ है, तो इंजन स्तर नहीं बढ़ाता बल्कि उसी स्तर पर सहनशक्ति को मजबूत करता है।\n\n"
+                "   - यदि बच्चे की सटीकता उच्च है लेकिन सत्र पूर्णता दर 50% से कम (< 50%) है, तो इंजन स्तर नहीं बढ़ाता बल्कि उसी स्तर पर सहनशक्ति को मजबूत करता है।\n\n"
                 "3. **स्तर 3: के-मीन्स एमएल क्लस्टरिंग (K-Means ML Cohorts)**:\n"
                 "   - गति, सटीकता और पूर्णता दर के आधार पर बच्चों को 4 समूहों (`high_performer`, `steady_learner`, `needs_support`, `curious_explorer`) में समूहित करती है।\n\n"
                 "**नैतिक व विनियामक नियम (PRD §4)**: यह प्रणाली पूर्णतः **गैर-निदानिक (strictly non-diagnostic)** है। यह कभी किसी बच्चे को लेबल या वर्गीकृत नहीं करती, बल्कि केवल सीखने की गति को अनुकूलित करती है।"
@@ -562,11 +597,11 @@ def _generate_grounded_fallback_answer(
             answer = (
                 "ChildInsight's **Adaptive Recommendation Engine** operates on a proven 3-layer architecture:\n\n"
                 "1. **Layer 1: Category Accuracy Thresholds (Rule-Based)**:\n"
-                "   - Accuracy $\\ge 80\\%$: Level-up progression (Beginner $\\to$ Easy $\\to$ Medium $\\to$ Advanced).\n"
-                "   - Accuracy $< 50\\%$: Step-down or foundational practice reinforcement.\n"
-                "   - Accuracy $50\\% - 79\\%$: Consolidates mastery at the current difficulty.\n\n"
+                "   - Accuracy >= 80%: Level-up progression (Beginner -> Easy -> Medium -> Advanced).\n"
+                "   - Accuracy < 50%: Step-down or foundational practice reinforcement.\n"
+                "   - Accuracy 50% - 79%: Consolidates mastery at the current difficulty.\n\n"
                 "2. **Layer 2: Combined Accuracy & Completion Stamina Calibration**:\n"
-                "   - Evaluates stamina alongside accuracy: if a learner has high accuracy but completion rate is $< 50\\%$, the engine reinforces engagement at the current tier before advancing.\n\n"
+                "   - Evaluates stamina alongside accuracy: if a learner has high accuracy but completion rate is < 50%, the engine reinforces engagement at the current tier before advancing.\n\n"
                 "3. **Layer 3: K-Means ML Clustering (Engagement Cohorts)**:\n"
                 "   - Clusters multi-session behavioral features (accuracy, speed, completion patterns) into 4 cohorts: `high_performer`, `steady_learner`, `needs_support`, and `curious_explorer`.\n\n"
                 "**Ethical Guardrail (PRD §4)**: The engine is **strictly non-diagnostic and educational only**. It never pathologizes or labels children; it purely adapts pedagogical pace and engagement."

@@ -636,7 +636,12 @@ ChildInsight includes an internal system agent layer for continuous platform hea
 3. **Platform Health Agent (`health_agent.py`)**: Calculates 0–100 platform health and per-cohort scores from learner engagement, session completion rates, and content adequacy.
 4. **Adaptive Content Suggestion Agent (`content_suggestion_agent.py`)**: Detects curriculum bottlenecks, learner cohort progression stalls, and multilingual translation gaps grounded in real learner data.
 5. **Content Draft Agent (`content_draft_agent.py`)**: Generates calibrated bilingual educational activities and multiple-choice questions grounded in existing curriculum tone and target age bands.
-6. **Orchestrator Agent (`orchestrator_agent.py`)**: A strictly read-only coordinator that reads outputs from all agents in one pass, deduplicates and consolidates related opportunities across age bands, computes objective priority tiers (`Critical`, `Important`, `Minor`), and organizes them into an intuitive Admin Action Center (`/admin/agents#action-center`).
+6. **Orchestrator Agent (`orchestrator_agent.py`)**: A strictly read-only coordinator that reads outputs from all agents in one pass, deduplicates and consolidates related opportunities across age bands, computes objective priority tiers (`Critical`, `Important`, `Minor`), and organizes them into an intuitive Admin Action Center (`/admin/action-center`).
+7. **Admin Assistant Agent (`admin_assistant.py`)**: A conversational guidance and diagnostic guide in the Action Center (`/admin/action-center`). It features:
+   - **Conversational Session Memory:** Maintains context across follow-up queries (e.g., asking *"What about Logic?"* followed by *"How many activities does it have?"* naturally resolves the referenced category).
+   - **Platform-Wide Grounded Coverage:** Answers questions across the entire platform using real telemetry and database queries (user counts by role, active learner counts, category structures, recent audit logs, how-to operational walkthroughs, and 3-layer recommendation engine explanations).
+   - **Dual-Language & Hindi Support:** Automatically detects Devanagari script or explicit language selection (`Auto-Detect / English / हिन्दी`) to converse naturally in Hindi with established terminology.
+   - **Strict Advisory-Only Boundary:** Zero database writes. If asked to act, fix, create, or delete, it refuses with clear guidance and deep links. Includes an authenticated session memory clear endpoint (`/admin/assistant/clear`).
 
 ### ⚡ Bulk Review Workflow
 Instead of reviewing and approving content suggestions or drafts one by one, the Orchestrator Action Center supports a streamlined **Bulk Review** workflow:

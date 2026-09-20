@@ -81,8 +81,15 @@
                 <span style="font-size: 0.8rem; color: var(--color-text-muted);">Scale 0–100</span>
             </div>
 
+            {% if health_metrics.score >= 85 %}
+                {% set score_color = '#16A34A' %}
+            {% elif health_metrics.score >= 60 %}
+                {% set score_color = '#D97706' %}
+            {% else %}
+                {% set score_color = '#DC2626' %}
+            {% endif %}
             <div style="text-align: center; padding: 1.25rem 0;">
-                <div style="font-size: 3.5rem; font-weight: 800; line-height: 1; color: {% if health_metrics.score >= 85 %}#16A34A{% elif health_metrics.score >= 60 %}#D97706{% else %}#DC2626{% endif %};">
+                <div style="font-size: 3.5rem; font-weight: 800; line-height: 1; color: {{ score_color }};">
                     {{ health_metrics.score }}
                 </div>
                 <div style="font-size: 0.9rem; font-weight: 600; color: var(--color-text-muted); margin-top: 0.5rem;">
@@ -111,13 +118,15 @@
                 </div>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.4rem;">
                     <span style="color: var(--color-text-muted);">Compliance Incidents (24h):</span>
-                    <strong style="color: {% if health_metrics.compliance_incidents_count > 0 %}#DC2626{% else %}#16A34A{% endif %};">
+                    {% set comp_color = '#DC2626' if health_metrics.compliance_incidents_count > 0 else '#16A34A' %}
+                    <strong style="color: {{ comp_color }};">
                         {{ health_metrics.compliance_incidents_count }}
                     </strong>
                 </div>
                 <div style="display: flex; justify-content: space-between;">
                     <span style="color: var(--color-text-muted);">Integrity Issues:</span>
-                    <strong style="color: {% if health_metrics.integrity_issues_count > 0 %}#D97706{% else %}#16A34A{% endif %};">
+                    {% set integ_color = '#D97706' if health_metrics.integrity_issues_count > 0 else '#16A34A' %}
+                    <strong style="color: {{ integ_color }};">
                         {{ health_metrics.integrity_issues_count }}
                     </strong>
                 </div>
@@ -361,13 +370,22 @@
     </div>
 </div>
 
+<script id="health-trend-data" type="application/json">
+{
+    "labels": {{ trend_labels_json|safe }},
+    "scores": {{ trend_scores_json|safe }}
+}
+</script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     // Platform Health Trend Chart
     var ctx = document.getElementById('healthTrendChart');
-    if (ctx && typeof Chart !== 'undefined') {
-        var labels = {{ trend_labels_json|safe }};
-        var data = {{ trend_scores_json|safe }};
+    var dataEl = document.getElementById('health-trend-data');
+    if (ctx && typeof Chart !== 'undefined' && dataEl) {
+        var chartData = JSON.parse(dataEl.textContent);
+        var labels = chartData.labels;
+        var data = chartData.scores;
 
         new Chart(ctx, {
             type: 'line',
