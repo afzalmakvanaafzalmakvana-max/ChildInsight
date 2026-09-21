@@ -41,7 +41,7 @@
     {% if selected_child %}
     <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
         <a href="{{ url_for('parent.progress_reports', child_id=selected_child.id) }}" class="btn btn-outline btn-sm">📈 Progress & Reports</a>
-        <a href="{{ url_for('child.categories_hub', child_id=selected_child.id) }}" class="btn btn-outline btn-sm" target="_blank">🎮 Activity Hub &rarr;</a>
+        <a href="{{ url_for('child.categories_hub', child_id=selected_child.id) }}" class="btn btn-outline btn-sm" target="_blank" rel="noopener noreferrer">🎮 Activity Hub &rarr;</a>
     </div>
     {% endif %}
 </div>

@@ -36,8 +36,8 @@ class Category(db.Model):
         if hi_name:
             return hi_name
         try:
-            from app.translations import t
-            return t(self.slug, default=self.name, lang=lang)
+            from app.translations import translate
+            return translate(self.slug, lang=lang, default=self.name)
         except Exception:
             return self.name
 

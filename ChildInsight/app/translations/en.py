@@ -24,6 +24,7 @@ TRANSLATIONS = {
     'back_to_activity_hub': '← Back to Activity Hub',
     'back_to_parent_dashboard': '← Back to Parent Dashboard',
     'back_to_teacher_workspace': '← Back to Teacher Workspace',
+    'back_to_admin_dashboard': '← Back to Admin Dashboard',
     'switch_learner': '🔄 Switch Learner',
     'playing_as': 'Playing as: {name}',
     'exit': 'Exit',

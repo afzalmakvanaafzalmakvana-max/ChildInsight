@@ -48,3 +48,7 @@ def translate(key: str, lang: str = 'en', default: str | None = None, **kwargs) 
         except Exception:
             return text
     return text
+
+
+t = translate
+

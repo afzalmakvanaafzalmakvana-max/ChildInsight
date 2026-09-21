@@ -24,6 +24,7 @@ TRANSLATIONS = {
     'back_to_activity_hub': '← गतिविधि हब पर वापस जाएं',
     'back_to_parent_dashboard': '← अभिभावक डैशबोर्ड पर वापस जाएं',
     'back_to_teacher_workspace': '← शिक्षक कार्यक्षेत्र पर वापस जाएं',
+    'back_to_admin_dashboard': '← व्यवस्थापक डैशबोर्ड पर वापस जाएं',
     'switch_learner': '🔄 शिक्षार्थी बदलें',
     'playing_as': 'खेल रहे हैं: {name}',
     'exit': 'बाहर निकलें',

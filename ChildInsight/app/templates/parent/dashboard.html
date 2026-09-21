@@ -267,7 +267,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 1. Domain Performance Bar Chart
     const catCtx = document.getElementById('categoryChart');
-    if (catCtx) {
+    if (catCtx && typeof Chart !== 'undefined') {
         new Chart(catCtx, {
             type: 'bar',
             data: {
@@ -318,7 +318,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 2. Session Progress Trend Line Chart
     const trendCtx = document.getElementById('trendChart');
-    if (trendCtx) {
+    if (trendCtx && typeof Chart !== 'undefined') {
         new Chart(trendCtx, {
             type: 'line',
             data: {

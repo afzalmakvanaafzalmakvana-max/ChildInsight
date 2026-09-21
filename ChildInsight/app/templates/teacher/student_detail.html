@@ -249,7 +249,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)';
 
     const catCtx = document.getElementById('categoryChart');
-    if (catCtx) {
+    if (catCtx && typeof Chart !== 'undefined') {
         new Chart(catCtx, {
             type: 'bar',
             data: {
@@ -299,7 +299,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const trendCtx = document.getElementById('trendChart');
-    if (trendCtx) {
+    if (trendCtx && typeof Chart !== 'undefined') {
         new Chart(trendCtx, {
             type: 'line',
             data: {
