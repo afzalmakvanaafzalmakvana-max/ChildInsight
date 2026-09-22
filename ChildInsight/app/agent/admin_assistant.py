@@ -541,8 +541,9 @@ def _generate_grounded_fallback_answer(
     # -------------------------------------------------------------------------
     elif any(k in q_lower for k in [
         'how many users', 'user count', 'users count', 'how many teachers', 'how many parents',
-        'how many children', 'how many students', 'how many learners', 'registered users', 'user breakdown'
-    ]) or any(k in question for k in ['कितने उपयोगकर्ता', 'कितने शिक्षक', 'कितने अभिभावक', 'कितने बच्चे', 'उपयोगकर्ता']):
+        'how many children', 'how many students', 'how many learners', 'registered users', 'user breakdown',
+        'registered teachers', 'registered parents', 'total users', 'platform users'
+    ]) or (any(t in q_lower for t in ['teacher', 'parent', 'user', 'child', 'student', 'learner']) and any(c in q_lower for c in ['how many', 'count', 'number of', 'total', 'registered'])) or any(k in question for k in ['कितने उपयोगकर्ता', 'कितने शिक्षक', 'कितने अभिभावक', 'कितने बच्चे', 'उपयोगकर्ता']):
         uc = context.get('user_counts', {})
         total_u = uc.get('total', 0)
         parents = uc.get('parent', 0)
