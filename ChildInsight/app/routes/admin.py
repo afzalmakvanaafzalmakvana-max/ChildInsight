@@ -1810,3 +1810,55 @@ def assistant_clear():
     })
 
 
+@admin_bp.route('/forms/translate-ai', methods=['POST'])
+@admin_bp.route('/translate-ai', methods=['POST'])
+@login_required
+@role_required('admin')
+def form_translate_ai():
+    """
+    Translates activity or category title/name and description into child-appropriate Hindi.
+    Strictly screens English input and Hindi output against Compliance Agent (PRD §4).
+    Returns in-memory suggestions for administrator review and editing; zero auto-saving.
+    """
+    from app.agent import translation_agent
+
+    data = {}
+    if request.is_json:
+        data = request.get_json() or {}
+    else:
+        data = request.form.to_dict()
+
+    title_or_name = (data.get('title') or data.get('name') or data.get('title_or_name') or '').strip()
+    description = data.get('description', '').strip()
+    context_type = data.get('context_type', 'activity').strip().lower()
+    age_band = data.get('age_band')
+
+    if not title_or_name and not description:
+        return jsonify({
+            'success': False,
+            'error': "Please provide an English title/name or description before translating."
+        }), 400
+
+    success, result, error_msg = translation_agent.translate_form_content(
+        title_or_name=title_or_name,
+        description=description,
+        context_type=context_type,
+        age_band=age_band
+    )
+
+    if not success:
+        return jsonify({
+            'success': False,
+            'error': error_msg or "Translation could not be completed."
+        }), 400
+
+    return jsonify({
+        'success': True,
+        'data': result,
+        'title_hi': result.get('title_hi', '') if result else '',
+        'name_hi': result.get('name_hi', '') if result else '',
+        'description_hi': result.get('description_hi', '') if result else ''
+    })
+
+
+

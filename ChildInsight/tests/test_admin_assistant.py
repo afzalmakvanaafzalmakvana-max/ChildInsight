@@ -492,8 +492,150 @@ class AdminAssistantTestCase(unittest.TestCase):
         data = json.loads(res_admin.data.decode('utf-8'))
         self.assertTrue(data.get('success'))
 
-        with self.client.session_transaction() as sess:
-            self.assertNotIn('admin_assistant_history', sess)
+    # =========================================================================
+    # 12. MULTI-TURN USER & RECOMMENDATION ENGINE CONVERSATIONAL FOLLOW-UPS
+    # =========================================================================
+
+    def test_multi_turn_user_breakdown_follow_ups(self):
+        """Conversational follow-ups about user roles (teachers, parents, children) resolve context seamlessly."""
+        total_u = User.query.count()
+        teachers = User.query.filter_by(role='teacher').count()
+        parents = User.query.filter_by(role='parent').count()
+        children = Child.query.count()
+
+        # Turn 1: Broad question about users
+        res1 = admin_assistant.ask_assistant("How many users are registered on the platform?")
+        self.assertIn(f"**{total_u} registered user(s)**", res1['answer'])
+
+        history = [
+            {'role': 'user', 'content': "How many users are registered on the platform?"},
+            {'role': 'assistant', 'content': res1['answer']}
+        ]
+
+        # Turn 2: Follow-up question about teachers specifically
+        res2 = admin_assistant.ask_assistant("What about teachers?", history=history)
+        self.assertIn(f"**{teachers} registered teacher(s)**", res2['answer'])
+        self.assertTrue(any('/admin/assignments' in l['url'] for l in res2['links']))
+
+        history.extend([
+            {'role': 'user', 'content': "What about teachers?"},
+            {'role': 'assistant', 'content': res2['answer']}
+        ])
+
+        # Turn 3: Follow-up question about parents
+        res3 = admin_assistant.ask_assistant("How many of them are parents?", history=history)
+        self.assertIn(f"**{parents} registered parent(s)**", res3['answer'])
+
+        history.extend([
+            {'role': 'user', 'content': "How many of them are parents?"},
+            {'role': 'assistant', 'content': res3['answer']}
+        ])
+
+        # Turn 4: Follow-up question about children
+        res4 = admin_assistant.ask_assistant("What about children?", history=history)
+        self.assertIn(f"**{children} child / learner profile(s)**", res4['answer'])
+
+    def test_multi_turn_recommendation_engine_difficulty_follow_up(self):
+        """Conversational follow-up about difficulty adaptation directly answers how difficulty is decided."""
+        # Turn 1: General question about recommendations
+        res1 = admin_assistant.ask_assistant("How does the recommendation engine work?")
+        self.assertIn("3-layer", res1['answer'].lower())
+
+        history = [
+            {'role': 'user', 'content': "How does the recommendation engine work?"},
+            {'role': 'assistant', 'content': res1['answer']}
+        ]
+
+        # Turn 2: Follow-up specifically asking "how does the recommendation engine decide difficulty?"
+        res2 = admin_assistant.ask_assistant("how does the recommendation engine decide difficulty?", history=history)
+        self.assertIn("80%", res2['answer'])
+        self.assertIn("50%", res2['answer'])
+        self.assertIn("stamina", res2['answer'].lower())
+        self.assertIn("non-diagnostic", res2['answer'].lower())
+
+        history.extend([
+            {'role': 'user', 'content': "how does the recommendation engine decide difficulty?"},
+            {'role': 'assistant', 'content': res2['answer']}
+        ])
+
+        # Turn 3: Pronoun follow-up "What about stamina?"
+        res3 = admin_assistant.ask_assistant("What about stamina?", history=history)
+        self.assertIn("stamina", res3['answer'].lower())
+        self.assertIn("completion", res3['answer'].lower())
+
+    # =========================================================================
+    # 13. BROADER PLATFORM QUESTIONS: CATALOG STRUCTURE & AUDIT LOGS
+    # =========================================================================
+
+    def test_broader_platform_questions_catalog_structure(self):
+        """Assistant accurately describes total activities, questions, categories, and difficulty breakdown."""
+        total_act = Activity.query.count()
+        total_q = ActivityQuestion.query.count()
+        cats_count = Category.query.count()
+
+        res = admin_assistant.ask_assistant("What is our activity catalog structure?")
+        self.assertIn(f"**{total_act} activities**", res['answer'])
+        self.assertIn(f"**{cats_count} categories**", res['answer'])
+        self.assertIn(f"**{total_q} interactive questions**", res['answer'])
+        self.assertIn("**Beginner**:", res['answer'])
+        self.assertIn("**Easy**:", res['answer'])
+        self.assertIn("**Medium**:", res['answer'])
+        self.assertIn("**Advanced**:", res['answer'])
+        self.assertTrue(any(l['url'] == '/admin/activities' for l in res['links']))
+        self.assertTrue(any(l['url'] == '/admin/categories' for l in res['links']))
+
+    def test_broader_platform_questions_audit_logs(self):
+        """Assistant surfaces recent audit log entries matching actual recorded actions."""
+        # Create a real audit log entry
+        log = AuditLog(
+            user_id=self.admin.id,
+            action='UPDATE_ROLE',
+            target_type='user',
+            target_id=self.parent.id
+        )
+        db.session.add(log)
+        db.session.commit()
+
+        res = admin_assistant.ask_assistant("Show me recent audit logs")
+        self.assertIn("Recent Administrative Audit Log Entries", res['answer'])
+        self.assertIn("UPDATE_ROLE", res['answer'])
+        self.assertIn("Admin User", res['answer'])
+        self.assertTrue(any(l['url'] == '/admin/audit-logs' for l in res['links']))
+
+    def test_broader_platform_questions_additional_how_tos(self):
+        """Assistant provides accurate UI steps and links for role updates and activity creation."""
+        # Create activity how-to
+        res_act = admin_assistant.ask_assistant("How do I create a new activity?")
+        self.assertIn("/admin/activities/new", res_act['answer'])
+        self.assertTrue(any(l['url'] == '/admin/activities/new' for l in res_act['links']))
+
+        # Update role how-to
+        res_role = admin_assistant.ask_assistant("How do I update a user's role?")
+        self.assertIn("/admin/users", res_role['answer'])
+        self.assertTrue(any(l['url'] == '/admin/users' for l in res_role['links']))
+
+    # =========================================================================
+    # 14. HINDI CONVERSATION: RECOMMENDATION ENGINE & HOW-TO
+    # =========================================================================
+
+    def test_hindi_recommendation_and_how_to_guidance(self):
+        """Assistant answers difficulty adaptation and how-to guides in grounded Devanagari Hindi."""
+        # Difficulty adaptation query in Hindi
+        res_diff = admin_assistant.ask_assistant("सिफारिश प्रणाली कठिनाई कैसे तय करती है?")
+        self.assertEqual(res_diff.get('detected_language'), 'hi')
+        self.assertTrue(admin_assistant.is_hindi_text(res_diff['answer']))
+        self.assertIn("सटीकता", res_diff['answer'])
+        self.assertIn("सहनशक्ति", res_diff['answer'])
+        self.assertIn("80%", res_diff['answer'])
+        self.assertIn("50%", res_diff['answer'])
+        self.assertIn("गैर-निदानिक", res_diff['answer'])
+
+        # How-to query in Hindi for teacher assignment
+        res_assign = admin_assistant.ask_assistant("विद्यार्थियों को शिक्षक से कैसे असाइन करें?")
+        self.assertEqual(res_assign.get('detected_language'), 'hi')
+        self.assertTrue(admin_assistant.is_hindi_text(res_assign['answer']))
+        self.assertIn("/admin/assignments", res_assign['answer'])
+        self.assertTrue(any(l['url'] == '/admin/assignments' for l in res_assign['links']))
 
 
 if __name__ == '__main__':

@@ -68,6 +68,34 @@ def home():
     return render_template('base_child.html', categories=categories, categories_by_slug=categories_by_slug, child=None, child_lang='en')
 
 
+@child_bp.route('/select-child')
+@login_required
+def select_child():
+    """
+    Dedicated child profile selection screen for parents with multiple children.
+    Renders the child-picker view (select_child.html) directly at /child/select-child.
+    """
+    if current_user.is_parent:
+        children = Child.query.filter_by(parent_id=current_user.id).all()
+        if not children:
+            flash("Please add a child profile first.", "info")
+            return redirect(url_for('parent.dashboard'))
+        return render_template('child/select_child.html', children=children)
+
+    if current_user.is_admin:
+        children = Child.query.all()
+        return render_template('child/select_child.html', children=children)
+
+    if current_user.is_child:
+        child = Child.query.filter_by(id=current_user.id).first()
+        if child:
+            return redirect(url_for('child.categories_hub', child_id=child.id))
+
+    if current_user.is_teacher:
+        return redirect(url_for('teacher.dashboard'))
+
+    return redirect(url_for('child.home'))
+
 
 @child_bp.route('/<int:child_id>/activities')
 @login_required

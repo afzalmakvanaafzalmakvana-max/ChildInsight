@@ -79,7 +79,7 @@ After running `python -m flask --app run.py seed-demo`, you can log into any por
 | **Educator / Teacher** | `teacher@childinsight.demo` | `DemoPass123!` | Student roster, individual growth profiles, class-wide aggregates (strictly unranked) |
 | **Parent / Guardian** | `parent@childinsight.demo` | `DemoPass123!` | Performance cards, trend charts, tailored recommendations, PDF/CSV reports |
 
-*To test the child play experience, log in as Parent Jordan and launch any activity from the dashboard, or navigate directly to `/child/select-child`.*
+*To test the child play experience, log in as Parent Jordan and launch any activity from the dashboard, or navigate directly to the child selector at `/child/select-child` (or `/child/home`).*
 
 ### 🔑 Password Reset & Demo Mode
 ChildInsight includes a secure "Forgot Password" workflow adhering to zero user enumeration principles:
@@ -177,6 +177,13 @@ To ensure newly authored learning content is never English-only by accident, bil
 3. **Category Management (`/admin/categories/new`, `/admin/categories/<id>/edit`)**:
    - Includes optional Hindi name and description inputs persisted to `categories.translations_json`.
    - Child category hubs and activity lists automatically render localized category names via `category.get_name(child_lang)`.
+
+4. **Convenient In-Form "Translate with AI" (`/admin/activities/new`, `/admin/categories/new`)**:
+   - Both the Add/Edit Activity form and Add/Edit Category form feature a prominent **"✨ Translate with AI"** button alongside the optional Hindi translation fields.
+   - When clicked, it translates the typed English title/name and description into natural, age-appropriate Hindi matching the tone and vocabulary of `activity_translations_seeds.py`.
+   - The generated suggestion automatically fills the Hindi fields in the browser DOM, remaining completely editable before saving.
+   - Both English inputs and Hindi outputs pass through the Compliance Agent (`compliance_agent.check_text()`); any clinical or deficit terminology triggers an immediate error banner, leaving the fields untouched.
+   - Strictly convenience-only: zero auto-save or auto-publish occurs; the activity or category is only saved when the administrator explicitly clicks the standard form submit button.
 
 ---
 
@@ -419,6 +426,14 @@ ChildInsight incorporates an internal agent layer under `app/agent/` designed to
 - **Explains and Guides — It Never Acts:** The assistant has read-only access to existing system data and possesses ZERO permissions or buttons to create, edit, publish, or delete anything. If asked to *"just fix it"* or *"do it for me"*, it clearly explains its advisory boundary—clarifying that all actions require human administrator oversight—and supplies direct links to the relevant administrative interface (`Content Suggestions`, `Activities`, `Categories`, `Audit Logs`, `Teacher Assignments`).
 - **Proactive Mistake-Catching:** Evaluates newly performed admin actions (creating/editing categories, activities, or changing user roles) against existing system validation and integrity checks to surface conversational "Assistant Notes" (e.g. *"This category has 0 activities — remember to add learning activities before children can explore it."*, *"Activity is missing a Hindi translation — flagged under Content Integrity Case D for follow-up."*, *"User was changed to Teacher role with 0 assigned students."*).
 - **Dual-Mode Intelligence:** Reuses the standard Anthropic Messages API (`claude-3-5-sonnet-20241022`) when `ANTHROPIC_API_KEY` is configured, while providing a 100% deterministic, grounded procedural fallback generator for offline and testing environments.
+
+### 9. AI-Assisted Form Translation Agent (`translation_agent.py`)
+- **What it does:** Powers the in-form **"Translate with AI"** convenience feature on both Add/Edit Activity and Add/Edit Category administrative forms (`activity_form.html`, `category_form.html`).
+- **Grounded, Child-Friendly Hindi Translation:** Translates English educational titles, domain names, and challenge descriptions into natural, warm, encouraging Devanagari Hindi calibrated for young learners and matching the vocabulary of `activity_translations_seeds.py`.
+- **Pre-Fill with Complete Human Editability:** Automatically fills `#title_hi` / `#name_hi` and `#description_hi` in the browser DOM without saving. Administrators can freely review, edit, tweak, or delete the suggestion before saving.
+- **Strict Dual-Language Compliance Sentinel:** Runs all English source inputs and generated Hindi suggestions through `compliance_agent.check_text()`. If any clinical, psychiatric, or diagnostic terms from PRD §4 are matched, the translation is rejected with a clear notice and no non-compliant text is entered into the form.
+- **Dual-Mode Execution:** Leverages the Anthropic Messages API (`claude-3-5-sonnet-20241022`) when `ANTHROPIC_API_KEY` is present, falling back to a deterministic, catalog-grounded dictionary generator when offline or in automated test suites.
+- **Zero Auto-Save / Zero Schema Impact:** Modifies zero database rows upon translation and requires no database schema changes.
 
 ---
 

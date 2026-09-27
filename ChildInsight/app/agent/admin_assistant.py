@@ -1,8 +1,9 @@
 """
 Admin Assistant Agent (app/agent/admin_assistant.py)
 
-A chat-style guidance agent that helps the administrator understand platform status,
-what needs attention, and what to do next. It explains and guides; it never acts.
+A conversational guidance agent that helps administrators understand platform status,
+catalog structure, learner engagement, recommendation engine mechanics, and how to
+perform operational tasks in the administrative console.
 
 CRITICAL ARCHITECTURAL CONSTRAINTS:
 1. STRICTLY READ-ONLY & NEVER ACTS: The assistant never creates, edits, publishes,
@@ -10,12 +11,17 @@ CRITICAL ARCHITECTURAL CONSTRAINTS:
    If asked to "fix it", "do it for me", or "delete/publish", it clearly explains its
    advisory role and directs the administrator to the appropriate admin page with links.
 2. STRICTLY GROUNDED IN REAL DATA: The assistant uses ONLY real data already gathered
-   by the Orchestrator Agent and other system agents (pending suggestions, integrity
-   issues, health scores, recent audit log entries, recent compliance incidents).
+   from the database and system agents (users by role, catalog structure, health scores,
+   integrity issues, pending suggestions, recent audit logs, compliance incidents).
    It must NEVER invent or hallucinate a claim, a number, or a recommendation.
-3. PROACTIVE MISTAKE-CATCHING: Runs newly performed admin actions (category/activity/user)
-   through existing validation and integrity checks to surface helpful conversational notes
-   (e.g., empty categories, 0 questions, missing Hindi translations, unassigned teachers).
+3. CONVERSATIONAL SESSION MEMORY: Preserves multi-turn conversational context in the
+   Flask session buffer (session['admin_assistant_history']), resolving follow-up
+   inquiries ("What about the Logic category?", "How many activities does it have?",
+   "What about teachers?", "How does it decide difficulty?") with warm, natural dialogue.
+4. HINDI BILINGUAL SUPPORT: Detects Devanagari script or explicit Hindi mode, providing
+   grounded, natural responses using established ChildInsight educational terminology.
+5. PROACTIVE MISTAKE-CATCHING: Surfaces existing system integrity checks after admin
+   mutations (empty categories, 0 questions, Case D untranslated activities, unassigned teachers).
 """
 
 from datetime import datetime, timezone
@@ -80,9 +86,9 @@ def gather_assistant_context() -> dict:
     - Pending content suggestions
     - Recent audit logs
     - Recent compliance incidents
-    - Category & activity structure
+    - Category & activity structure (activity & question counts per category)
     - Platform user counts by role & learner counts
-    - Catalog & session totals
+    - Catalog & session totals (difficulty breakdown, active counts)
     
     Zero invented data: every field is derived directly from the database or
     deterministic agent routines.
@@ -130,7 +136,7 @@ def gather_assistant_context() -> dict:
         logger.warning("Error fetching content suggestions: %s", e)
         suggestions_summary = []
 
-    # 5. Recent Audit Logs
+    # 5. Recent Audit Logs (last 10 events)
     try:
         recent_logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(10).all()
         audit_summary = [
@@ -154,18 +160,21 @@ def gather_assistant_context() -> dict:
         logger.warning("Error fetching compliance incidents: %s", e)
         compliance_incidents_24h = 0
 
-    # 7. Categories Overview
+    # 7. Categories Overview & Detailed Structure
     try:
         categories = Category.query.all()
         categories_data = []
         for cat in categories:
             act_count = cat.activities.count() if hasattr(cat.activities, 'count') else len(cat.activities)
             has_hi = bool(cat.translations and cat.translations.get('hi', {}).get('name'))
+            # Question count in this category
+            q_count = ActivityQuestion.query.join(Activity).filter(Activity.category_id == cat.id).count()
             categories_data.append({
                 'id': cat.id,
                 'name': cat.name,
                 'slug': cat.slug,
                 'activity_count': act_count,
+                'question_count': q_count,
                 'has_hindi': has_hi
             })
     except Exception as e:
@@ -185,18 +194,34 @@ def gather_assistant_context() -> dict:
         logger.warning("Error fetching user counts: %s", e)
         user_counts = {'total': 0, 'parent': 0, 'teacher': 0, 'admin': 0, 'children': 0}
 
-    # 9. Catalog & Session Totals
+    # 9. Catalog & Session Totals & Difficulty Breakdown
     try:
+        difficulty_breakdown = {
+            'Beginner': Activity.query.filter_by(difficulty='Beginner').count(),
+            'Easy': Activity.query.filter_by(difficulty='Easy').count(),
+            'Medium': Activity.query.filter_by(difficulty='Medium').count(),
+            'Advanced': Activity.query.filter_by(difficulty='Advanced').count()
+        }
         catalog_counts = {
             'activities': Activity.query.count(),
+            'active_activities': Activity.query.filter_by(is_active=True).count(),
             'questions': ActivityQuestion.query.count(),
             'categories': len(categories_data),
             'completed_sessions': ActivitySession.query.filter_by(status=ActivitySession.STATUS_COMPLETED).count(),
-            'teacher_assignments': TeacherAssignment.query.count()
+            'teacher_assignments': TeacherAssignment.query.count(),
+            'difficulty_breakdown': difficulty_breakdown
         }
     except Exception as e:
         logger.warning("Error fetching catalog counts: %s", e)
-        catalog_counts = {'activities': 0, 'questions': 0, 'categories': len(categories_data), 'completed_sessions': 0, 'teacher_assignments': 0}
+        catalog_counts = {
+            'activities': 0,
+            'active_activities': 0,
+            'questions': 0,
+            'categories': len(categories_data),
+            'completed_sessions': 0,
+            'teacher_assignments': 0,
+            'difficulty_breakdown': {'Beginner': 0, 'Easy': 0, 'Medium': 0, 'Advanced': 0}
+        }
 
     # Synthesize priority tier counts
     critical_items = [item for item in action_items if item.get('priority_tier') == orchestrator_agent.TIER_CRITICAL]
@@ -253,7 +278,7 @@ def gather_assistant_context() -> dict:
         'pending_suggestions_count': len(suggestions_summary),
         'pending_suggestions': suggestions_summary[:10],
         'compliance_incidents_24h': compliance_incidents_24h,
-        'recent_audit_logs': audit_summary[:5],
+        'recent_audit_logs': audit_summary[:10],
         'categories': categories_data,
         'user_counts': user_counts,
         'catalog_counts': catalog_counts
@@ -310,7 +335,7 @@ def is_action_request(question: str) -> bool:
 
 def _build_action_refusal_response(question: str, context: dict, is_hindi: bool = False) -> dict:
     """
-    Constructs a polite, clear refusal explaining the assistant's read-only advisory
+    Constructs a polite, conversational refusal explaining the assistant's read-only advisory
     nature and provides direct links to where the administrator can perform the action.
     """
     q_lower = question.lower()
@@ -365,6 +390,39 @@ def _build_action_refusal_response(question: str, context: dict, is_hindi: bool 
 # 3. CONVERSATIONAL CONTEXT & HISTORY EXTRACTION
 # =============================================================================
 
+def _extract_last_topic(history: Optional[List[Dict[str, str]]]) -> Optional[str]:
+    """
+    Inspects recent conversation turns to determine the primary conversational topic
+    (e.g., 'category', 'users', 'recommendations', 'audit_logs', 'how_to', 'health', 'action_items', 'catalog').
+    Enables natural follow-ups such as 'What about teachers?' or 'How does it decide difficulty?'.
+    """
+    if not history:
+        return None
+
+    for msg in reversed(history):
+        content = (msg.get('content') or '').lower()
+        if any(k in content for k in ['recommendation', 'recommendations', 'difficulty', 'stamina', 'k-means', 'kmeans', 'cohort', 'सिफारिश', 'कठिनाई', 'सहनशक्ति']):
+            return 'recommendations'
+        if any(k in content for k in ['how many users', 'user count', 'registered user', 'registered users', 'teachers', 'parents', 'children', 'students', 'learners', 'उपयोगकर्ता', 'शिक्षक', 'अभिभावक', 'बच्चे']):
+            return 'users'
+        if any(k in content for k in ['audit log', 'recent log', 'audit', 'ऑडिट', 'हाल के लॉग']):
+            return 'audit_logs'
+        if any(k in content for k in ['how do i', 'how to', 'how can i', 'steps to', 'कहाँ जाऊं', 'कैसे करें']):
+            return 'how_to'
+        if any(k in content for k in ['health', 'score', 'posture', 'completion rate', 'स्वास्थ्य', 'टेलीमेट्री']):
+            return 'health'
+        if any(k in content for k in ['what should i do', 'next steps', 'priorities', 'action items', 'क्या करूँ', 'प्राथमिकता']):
+            return 'action_items'
+        if any(k in content for k in ['catalog', 'activities count', 'questions count', 'कैटलॉग']):
+            return 'catalog'
+        # Check if category was mentioned
+        for cat_keywords in CATEGORY_KEYWORDS.values():
+            if any(kw in content for kw in cat_keywords):
+                return 'category'
+
+    return None
+
+
 def _extract_category_from_history(history: Optional[List[Dict[str, str]]], categories: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """
     Inspects recent conversation turns to find the most recently discussed category.
@@ -385,6 +443,16 @@ def _extract_category_from_history(history: Optional[List[Dict[str, str]]], cate
             for kw in CATEGORY_KEYWORDS.get(cat['slug'], []):
                 if kw in content:
                     return cat
+        if any(kw in content for kw in CATEGORY_KEYWORDS.get('science-nature', [])):
+            return {
+                'id': None,
+                'name': 'Science & Nature',
+                'slug': 'science-nature',
+                'activity_count': 0,
+                'question_count': 0,
+                'has_hindi': False,
+                'uncreated': True
+            }
 
     return None
 
@@ -409,6 +477,7 @@ def _match_category_in_query(question: str, categories: List[Dict[str, Any]]) ->
             'name': 'Science & Nature',
             'slug': 'science-nature',
             'activity_count': 0,
+            'question_count': 0,
             'has_hindi': False,
             'uncreated': True
         }
@@ -427,37 +496,55 @@ def _generate_grounded_fallback_answer(
     is_hindi: bool = False
 ) -> dict:
     """
-    Generates a 100% grounded, conversational answer strictly from real platform context.
+    Generates a 100% grounded, warm, conversational answer strictly from real platform context.
     Maintains conversational memory of recent turns and supports both English and Hindi.
     """
     q_lower = question.lower().strip()
     relevant_links = []
     categories = context.get('categories', [])
+    last_topic = _extract_last_topic(history)
+    prev_cat = _extract_category_from_history(history, categories)
 
     # -------------------------------------------------------------------------
     # A. Category Resolution (Direct Match or Conversational Follow-up via History)
     # -------------------------------------------------------------------------
     matched_cat = _match_category_in_query(question, categories)
 
+    # Check for domain-specific queries to avoid false category hijacking
+    is_rec_query = any(k in q_lower for k in [
+        'recommendation', 'recommendations', 'difficulty', 'stamina', 'k-means', 'kmeans',
+        'cohort', 'algorithm', 'how do recommendations work', 'adaptation', 'adaptive', 'analytics', 'engagement index'
+    ]) or any(k in question for k in ['सिफारिश', 'सुझाव प्रणाली', 'कठिनाई', 'एल्गोरिदम', 'सहनशक्ति'])
+
+    is_user_query = any(k in q_lower for k in [
+        'how many users', 'user count', 'users count', 'how many teachers', 'how many parents',
+        'how many children', 'how many students', 'how many learners', 'registered users', 'user breakdown',
+        'registered teachers', 'registered parents', 'total users', 'platform users'
+    ]) or any(k in question for k in ['कितने उपयोगकर्ता', 'कितने शिक्षक', 'कितने अभिभावक', 'कितने बच्चे', 'उपयोगकर्ता'])
+
+    is_howto_query = any(k in q_lower for k in ['how to', 'how do i', 'how can i', 'steps to', 'where do i', 'how do we']) or any(k in question for k in ['कैसे', 'कहाँ', 'चरण'])
+
     # If no direct match, check if query is an elliptical follow-up referencing prior category
-    if not matched_cat and history:
-        is_pronoun_reference = bool(re.search(
-            r'\b(?:it|this|that|the category|this category|that category|its)\b',
-            q_lower
-        ) or re.search(r'(?:इस|उस|इसकी|उसकी|इसमें|उसमें|श्रेणी)', question))
+    is_pronoun_reference = bool(re.search(
+        r'\b(?:it|this|that|the category|this category|that category|its)\b',
+        q_lower
+    ) or re.search(r'(?:इस|उस|इसकी|उसकी|इसमें|उसमें|श्रेणी)', question))
 
-        is_category_question = any(k in q_lower for k in [
-            'how many activities', 'how many questions', 'is it healthy', 'what about', 'status',
-            'कितनी गतिविधियाँ', 'कितने प्रश्न', 'स्थिति'
-        ])
+    is_cat_metric_question = any(k in q_lower for k in [
+        'how many activities', 'how many questions', 'is it healthy', 'status of',
+        'does it have questions', 'is it translated', 'how many does it have',
+        'कितनी गतिविधियाँ', 'कितने प्रश्न', 'स्थिति', 'क्या इसमें प्रश्न हैं'
+    ])
 
-        if is_pronoun_reference or is_category_question:
-            matched_cat = _extract_category_from_history(history, categories)
+    if not matched_cat and history and not (is_rec_query or is_user_query or is_howto_query):
+        if is_pronoun_reference or is_cat_metric_question or (last_topic == 'category' and 'what about' in q_lower):
+            matched_cat = prev_cat
 
-    if matched_cat:
+    if matched_cat and not (is_howto_query or is_rec_query or is_user_query):
         cat_id = matched_cat.get('id')
         cat_name = matched_cat['name']
         act_count = matched_cat['activity_count']
+        q_count = matched_cat.get('question_count', 0)
         has_hi = matched_cat['has_hindi']
         is_uncreated = matched_cat.get('uncreated', False)
 
@@ -471,79 +558,114 @@ def _generate_grounded_fallback_answer(
             if (cat_id and s.get('category_id') == cat_id) or (is_uncreated and ('science' in s.get('category_name', '').lower() or 'nature' in s.get('category_name', '').lower()))
         ]
 
-        if is_hindi:
-            if is_uncreated:
-                status_lines = [
-                    f"श्रेणी **'{cat_name}' (विज्ञान और प्रकृति)** की स्थिति:",
-                    f"- **सक्रिय गतिविधियां**: 0 (श्रेणी अभी तक कैटलॉग में नहीं जोड़ी गई है)",
-                    f"- **लंबित सामग्री सुझाव**: {len(cat_suggestions)} सुझाव",
-                    f"\nयह श्रेणी अभी तक नहीं बनाई गई है। आप [नई श्रेणी बनाएं](/admin/categories/new) से इसे जोड़ सकते हैं।"
-                ]
-                relevant_links.append(ADMIN_LINKS['new_category'])
-            else:
-                status_lines = [
-                    f"श्रेणी **'{cat_name}'** की वर्तमान स्थिति:",
-                    f"- **सक्रिय गतिविधियां**: {act_count} गतिविधियां",
-                    f"- **हिंदी अनुवाद**: {'उपलब्ध है' if has_hi else 'हिंदी नाम/विवरण अनुपलब्ध है'}",
-                    f"- **लंबित सामग्री सुझाव**: {len(cat_suggestions)} सुझाव"
-                ]
+        # Conversational transition note if switching from another category
+        transition_prefix_en = ""
+        transition_prefix_hi = ""
+        if prev_cat and prev_cat['slug'] != matched_cat['slug']:
+            transition_prefix_en = f"Looking at **{cat_name}** (following up on {prev_cat['name']}): "
+            transition_prefix_hi = f"{prev_cat['name']} के बाद, अब **{cat_name}** श्रेणी की स्थिति देखते हैं: "
 
-                if cat_items:
-                    status_lines.append("\n**सक्रिय एक्शन सेंटर कार्य:**")
-                    for item in cat_items:
-                        status_lines.append(f"- [{item['priority_tier']}] {item['summary']}")
-                        relevant_links.append({'label': item['action_label'], 'url': item['action_url']})
-                elif act_count == 0:
-                    status_lines.append(f"\nइस श्रेणी में **0 गतिविधियां** हैं। बच्चे इसमें तब तक नहीं खेल सकते जब तक गतिविधियां जोड़ी न जाएं।")
-                    relevant_links.append({'label': f"{cat_name} में गतिविधि जोड़ें", 'url': f"/admin/activities/new?category_id={cat_id}"})
+        # Specific follow-up: "How many activities does it have?"
+        if any(k in q_lower for k in ['how many activities', 'activity count', 'activities does it have', 'कितनी गतिविधियां', 'कितनी गतिविधियाँ']):
+            if is_hindi:
+                if is_uncreated:
+                    answer = f"{transition_prefix_hi}श्रेणी **'{cat_name}'** में वर्तमान में **0 सक्रिय गतिविधियां** हैं क्योंकि इसे अभी कैटलॉग में नहीं जोड़ा गया है।"
+                    relevant_links.append(ADMIN_LINKS['new_category'])
                 else:
-                    status_lines.append(f"\n'{cat_name}' श्रेणी में कोई सक्रिय विसंगति या महत्वपूर्ण कमी नहीं पाई गई है।")
-
-                relevant_links.append({'label': f"{cat_name} गतिविधियां प्रबंधित करें", 'url': f"/admin/activities?category_id={cat_id}"})
-
-            answer = "\n".join(status_lines)
-            relevant_links.append(ADMIN_LINKS['categories'])
-        else:
-            if is_uncreated:
-                status_lines = [
-                    f"Status for category **'{cat_name}'**:",
-                    f"- **Activity Count**: 0 active activities (Category not yet created in catalog)",
-                    f"- **Pending Content Suggestions**: {len(cat_suggestions)} suggestion(s)",
-                    f"\nThis category has not been created yet in the catalog. You can add it directly at [Create Category](/admin/categories/new)."
-                ]
-                relevant_links.append(ADMIN_LINKS['new_category'])
+                    answer = f"{transition_prefix_hi}श्रेणी **'{cat_name}'** में वर्तमान में कुल **{act_count} active activities** उपलब्ध हैं।"
+                    relevant_links.append({'label': f"{cat_name} गतिविधियां प्रबंधित करें", 'url': f"/admin/activities?category_id={cat_id}"})
             else:
-                status_lines = [
-                    f"Status for category **'{cat_name}'**:",
-                    f"- **Activity Count**: {act_count} active activities",
-                    f"- **Hindi Category Translation**: {'Present' if has_hi else 'Missing Hindi name/description'}",
-                    f"- **Pending Content Suggestions**: {len(cat_suggestions)} suggestion(s)"
-                ]
-
-                if cat_items:
-                    status_lines.append("\n**Active Action Center Items:**")
-                    for item in cat_items:
-                        status_lines.append(f"- [{item['priority_tier']}] {item['summary']}")
-                        relevant_links.append({'label': item['action_label'], 'url': item['action_url']})
-                elif act_count == 0:
-                    status_lines.append(f"\nThis category has **0 activities**. Children cannot see or play in this category until activities are added.")
-                    relevant_links.append({'label': f"Add Activity to {cat_name}", 'url': f"/admin/activities/new?category_id={cat_id}"})
+                if is_uncreated:
+                    answer = f"{transition_prefix_en}The **'{cat_name}'** category currently has **0 active activities** because it hasn't been created in the catalog yet."
+                    relevant_links.append(ADMIN_LINKS['new_category'])
                 else:
-                    status_lines.append(f"\nNo active anomalies or critical gaps were flagged for '{cat_name}'.")
+                    answer = f"{transition_prefix_en}The **'{cat_name}'** category currently has **{act_count} active activities** in the catalog."
+                    relevant_links.append({'label': f"Manage {cat_name} Activities", 'url': f"/admin/activities?category_id={cat_id}"})
 
+        # Specific follow-up: "How many questions does it have?"
+        elif any(k in q_lower for k in ['how many questions', 'does it have questions', 'question count', 'questions does it have', 'कितने प्रश्न']):
+            if is_hindi:
+                answer = f"{transition_prefix_hi}श्रेणी **'{cat_name}'** की गतिविधियों में कुल **{q_count} इंटरैक्टिव प्रश्न** हैं।"
+                relevant_links.append({'label': f"{cat_name} गतिविधियां", 'url': f"/admin/activities?category_id={cat_id}"})
+            else:
+                answer = f"{transition_prefix_en}Activities in the **'{cat_name}'** category contain a total of **{q_count} interactive questions**."
                 relevant_links.append({'label': f"Manage {cat_name} Activities", 'url': f"/admin/activities?category_id={cat_id}"})
 
-            answer = "\n".join(status_lines)
-            relevant_links.append(ADMIN_LINKS['categories'])
+        # General Category Status Conversation
+        else:
+            if is_hindi:
+                if is_uncreated:
+                    status_lines = [
+                        f"{transition_prefix_hi}श्रेणी **'{cat_name}' (विज्ञान और प्रकृति)** की वर्तमान स्थिति:",
+                        f"- **सक्रिय गतिविधियां**: 0 (श्रेणी अभी तक कैटलॉग में नहीं जोड़ी गई है)",
+                        f"- **लंबित सामग्री सुझाव**: {len(cat_suggestions)} सुझाव",
+                        f"\nयह श्रेणी अभी तक नहीं बनाई गई है। आप [नई श्रेणी बनाएं](/admin/categories/new) से इसे जोड़ सकते हैं।"
+                    ]
+                    relevant_links.append(ADMIN_LINKS['new_category'])
+                else:
+                    status_lines = [
+                        f"{transition_prefix_hi}श्रेणी **'{cat_name}'** की वर्तमान स्थिति:",
+                        f"- **सक्रिय गतिविधियां**: {act_count} गतिविधियां",
+                        f"- **प्रश्न संख्या**: {q_count} प्रश्न",
+                        f"- **हिंदी अनुवाद**: {'उपलब्ध है' if has_hi else 'हिंदी नाम/विवरण अनुपलब्ध है'}",
+                        f"- **लंबित सामग्री सुझाव**: {len(cat_suggestions)} सुझाव"
+                    ]
+
+                    if cat_items:
+                        status_lines.append("\n**सक्रिय एक्शन सेंटर कार्य:**")
+                        for item in cat_items:
+                            status_lines.append(f"- [{item['priority_tier']}] {item['summary']}")
+                            relevant_links.append({'label': item['action_label'], 'url': item['action_url']})
+                    elif act_count == 0:
+                        status_lines.append(f"\nइस श्रेणी में **0 गतिविधियां** हैं। बच्चे इसमें तब तक नहीं खेल सकते जब तक गतिविधियां जोड़ी न जाएं।")
+                        relevant_links.append({'label': f"{cat_name} में गतिविधि जोड़ें", 'url': f"/admin/activities/new?category_id={cat_id}"})
+                    else:
+                        status_lines.append(f"\n'{cat_name}' श्रेणी बहुत अच्छी स्थिति में है और इसमें कोई सक्रिय विसंगति नहीं है।")
+
+                    relevant_links.append({'label': f"{cat_name} गतिविधियां प्रबंधित करें", 'url': f"/admin/activities?category_id={cat_id}"})
+
+                answer = "\n".join(status_lines)
+                relevant_links.append(ADMIN_LINKS['categories'])
+            else:
+                if is_uncreated:
+                    status_lines = [
+                        f"{transition_prefix_en}Status for category **'{cat_name}'**:",
+                        f"- **Activity Count**: 0 active activities (Category not yet created in catalog)",
+                        f"- **Pending Content Suggestions**: {len(cat_suggestions)} suggestion(s)",
+                        f"\nThis category has not been created yet in the catalog. You can add it directly at [Create Category](/admin/categories/new)."
+                    ]
+                    relevant_links.append(ADMIN_LINKS['new_category'])
+                else:
+                    status_lines = [
+                        f"{transition_prefix_en}Status for category **'{cat_name}'**:",
+                        f"- **Activity Count**: {act_count} active activities",
+                        f"- **Question Count**: {q_count} interactive questions",
+                        f"- **Hindi Category Translation**: {'Present' if has_hi else 'Missing Hindi name/description'}",
+                        f"- **Pending Content Suggestions**: {len(cat_suggestions)} suggestion(s)"
+                    ]
+
+                    if cat_items:
+                        status_lines.append("\n**Active Action Center Items:**")
+                        for item in cat_items:
+                            status_lines.append(f"- [{item['priority_tier']}] {item['summary']}")
+                            relevant_links.append({'label': item['action_label'], 'url': item['action_url']})
+                    elif act_count == 0:
+                        status_lines.append(f"\nThis category has **0 activities**. Children cannot see or play in this category until activities are added.")
+                        relevant_links.append({'label': f"Add Activity to {cat_name}", 'url': f"/admin/activities/new?category_id={cat_id}"})
+                    else:
+                        status_lines.append(f"\nNo active anomalies or critical gaps were flagged for '{cat_name}'. It is active and healthy in the catalog.")
+
+                    relevant_links.append({'label': f"Manage {cat_name} Activities", 'url': f"/admin/activities?category_id={cat_id}"})
+
+                answer = "\n".join(status_lines)
+                relevant_links.append(ADMIN_LINKS['categories'])
 
     # -------------------------------------------------------------------------
-    # B. Platform User & Learner Counts
+    # B. Platform User & Learner Counts (with conversational follow-ups)
     # -------------------------------------------------------------------------
-    elif any(k in q_lower for k in [
-        'how many users', 'user count', 'users count', 'how many teachers', 'how many parents',
-        'how many children', 'how many students', 'how many learners', 'registered users', 'user breakdown',
-        'registered teachers', 'registered parents', 'total users', 'platform users'
-    ]) or (any(t in q_lower for t in ['teacher', 'parent', 'user', 'child', 'student', 'learner']) and any(c in q_lower for c in ['how many', 'count', 'number of', 'total', 'registered'])) or any(k in question for k in ['कितने उपयोगकर्ता', 'कितने शिक्षक', 'कितने अभिभावक', 'कितने बच्चे', 'उपयोगकर्ता']):
+    elif (is_user_query or (
+        last_topic == 'users' and any(u in q_lower for u in ['teacher', 'parent', 'admin', 'child', 'learner', 'student'])
+    )) and not is_howto_query:
         uc = context.get('user_counts', {})
         total_u = uc.get('total', 0)
         parents = uc.get('parent', 0)
@@ -551,69 +673,160 @@ def _generate_grounded_fallback_answer(
         admins = uc.get('admin', 0)
         children = uc.get('children', 0)
 
-        if is_hindi:
-            answer = (
-                f"ChildInsight में वर्तमान में कुल **{total_u} पंजीकृत उपयोगकर्ता** और **{children} शिक्षार्थी (बच्चे)** हैं:\n\n"
-                f"- **अभिभावक (Parents)**: {parents}\n"
-                f"- **शिक्षक (Teachers)**: {teachers}\n"
-                f"- **प्रशासक (Administrators)**: {admins}\n"
-                f"- **बच्चे / शिक्षार्थी प्रोफाइल**: {children}\n\n"
-                f"आप [उपयोगकर्ता प्रबंधन (/admin/users)](/admin/users) में उपयोगकर्ता खातों और उनकी भूमिकाओं को प्रबंधित कर सकते हैं, "
-                f"या [शिक्षक असाइनमेंट](/admin/assignments) में विद्यार्थियों को शिक्षकों से जोड़ सकते हैं।"
-            )
+        is_asking_all = any(k in q_lower for k in ['all users', 'total users', 'user breakdown', 'how many users', 'registered users', 'उपयोगकर्ता कितने'])
+
+        # Specific follow-up on teachers
+        if not is_asking_all and ('teacher' in q_lower or 'शिक्षक' in question):
+            if is_hindi:
+                answer = (
+                    f"हमारे कुल **{total_u} पंजीकृत उपयोगकर्ताओं** में से वर्तमान में **{teachers} पंजीकृत शिक्षक** हैं।\n\n"
+                    f"आप [शिक्षक असाइनमेंट](/admin/assignments) में विद्यार्थियों को शिक्षकों से जोड़ सकते हैं, "
+                    f"या [उपयोगकर्ता प्रबंधन](/admin/users) में शिक्षक खातों की समीक्षा कर सकते हैं।"
+                )
+            else:
+                answer = (
+                    f"Of our **{total_u} registered users**, we currently have **{teachers} registered teacher(s)** on the platform.\n\n"
+                    f"You can manage their student rosters in [Teacher Assignments](/admin/assignments) "
+                    f"or inspect user accounts in [User Management](/admin/users)."
+                )
+            relevant_links.append(ADMIN_LINKS['assignments'])
+            relevant_links.append(ADMIN_LINKS['users'])
+
+        # Specific follow-up on parents
+        elif not is_asking_all and ('parent' in q_lower or 'अभिभावक' in question):
+            if is_hindi:
+                answer = (
+                    f"प्लेटफ़ॉर्म पर वर्तमान में **{parents} पंजीकृत अभिभावक (Parents)** हैं, जो **{children} बाल शिक्षार्थियों** की देखरेख कर रहे हैं।\n\n"
+                    f"अभिभावक खातों का विवरण [उपयोगकर्ता प्रबंधन](/admin/users) में देखा जा सकता है।"
+                )
+            else:
+                answer = (
+                    f"We currently have **{parents} registered parent(s)** on ChildInsight, caring for **{children} child / learner profile(s)**.\n\n"
+                    f"You can review parent accounts in [User Management](/admin/users)."
+                )
+            relevant_links.append(ADMIN_LINKS['users'])
+
+        # Specific follow-up on children/learners
+        elif not is_asking_all and any(k in q_lower for k in ['child', 'learner', 'student', 'बच्चे']):
+            if is_hindi:
+                answer = (
+                    f"वर्तमान में प्लेटफ़ॉर्म पर कुल **{children} शिक्षार्थी (बच्चे)** सक्रिय हैं।\n\n"
+                    f"प्रत्येक बच्चे की सीखने की प्रगति और असाइनमेंट [शिक्षक असाइनमेंट](/admin/assignments) और अभिभावक पोर्टलों से जुड़े हैं।"
+                )
+            else:
+                answer = (
+                    f"There are currently **{children} child / learner profile(s)** exploring activities on ChildInsight.\n\n"
+                    f"You can allocate student rosters to educators in [Teacher Assignments](/admin/assignments)."
+                )
+            relevant_links.append(ADMIN_LINKS['assignments'])
+
+        # General user breakdown
         else:
-            answer = (
-                f"ChildInsight currently has **{total_u} registered user(s)** and **{children} child/learner profile(s)** across the platform:\n\n"
-                f"- **Parents**: {parents}\n"
-                f"- **Teachers**: {teachers}\n"
-                f"- **Administrators**: {admins}\n"
-                f"- **Children / Learners**: {children}\n\n"
-                f"You can manage user roles and view account details in [User Management](/admin/users), "
-                f"or allocate students in [Teacher Assignments](/admin/assignments)."
-            )
-        relevant_links.append(ADMIN_LINKS['users'])
-        relevant_links.append(ADMIN_LINKS['assignments'])
+            if is_hindi:
+                answer = (
+                    f"ChildInsight में वर्तमान में कुल **{total_u} पंजीकृत उपयोगकर्ता** और **{children} शिक्षार्थी (बच्चे)** हैं:\n\n"
+                    f"- **अभिभावक (Parents)**: {parents}\n"
+                    f"- **शिक्षक (Teachers)**: {teachers}\n"
+                    f"- **प्रशासक (Administrators)**: {admins}\n"
+                    f"- **बच्चे / शिक्षार्थी प्रोफाइल**: {children}\n\n"
+                    f"आप [उपयोगकर्ता प्रबंधन (/admin/users)](/admin/users) में उपयोगकर्ता खातों और उनकी भूमिकाओं को प्रबंधित कर सकते हैं, "
+                    f"या [शिक्षक असाइनमेंट](/admin/assignments) में विद्यार्थियों को शिक्षकों से जोड़ सकते हैं।"
+                )
+            else:
+                answer = (
+                    f"ChildInsight currently has **{total_u} registered user(s)** and **{children} child/learner profile(s)** across the platform:\n\n"
+                    f"- **Parents**: {parents}\n"
+                    f"- **Teachers**: {teachers}\n"
+                    f"- **Administrators**: {admins}\n"
+                    f"- **Children / Learners**: {children}\n\n"
+                    f"You can manage user roles and view account details in [User Management](/admin/users), "
+                    f"or allocate students in [Teacher Assignments](/admin/assignments)."
+                )
+            relevant_links.append(ADMIN_LINKS['users'])
+            relevant_links.append(ADMIN_LINKS['assignments'])
 
     # -------------------------------------------------------------------------
     # C. Recommendation Engine & Analytics Architecture
     # -------------------------------------------------------------------------
-    elif any(k in q_lower for k in [
-        'recommendation', 'recommendations', 'difficulty', 'stamina', 'k-means', 'kmeans',
-        'cohort', 'algorithm', 'how do recommendations work', 'adaptation', 'adaptive'
-    ]) or any(k in question for k in ['सिफारिश', 'सुझाव प्रणाली', 'कठिनाई', 'एल्गोरिदम']):
+    elif is_rec_query or (last_topic == 'recommendations' and any(k in q_lower for k in ['how does it', 'layers', 'rules', 'thresholds', 'how is it decided', 'stamina', 'difficulty', 'cohorts', 'what about'])):
+        # Follow-up specifically on stamina
+        is_stamina_focus = 'stamina' in q_lower or 'सहनशक्ति' in question
+        # Follow-up specifically on difficulty adaptation
+        is_difficulty_focus = any(k in q_lower for k in ['decide difficulty', 'decides difficulty', 'difficulty decide', 'difficulty work', 'difficulty adaptation', 'adapt difficulty', 'कठिनाई कैसे', 'difficulty'])
+        
         if is_hindi:
-            answer = (
-                "ChildInsight की **अनुशंसा और अनुकूलन प्रणाली (Recommendation Engine)** एक 3-स्तरीय डिज़ाइन पर काम करती है:\n\n"
-                "1. **स्तर 1: नियम-आधारित श्रेणी सटीकता (Rule-Based Accuracy Thresholds)**:\n"
-                "   - 80% या अधिक सटीकता (>= 80%): स्तर आगे बढ़ाती है (Beginner -> Easy -> Medium -> Advanced)।\n"
-                "   - 50% से कम सटीकता (< 50%): मूलभूत समझ मजबूत करने के लिए स्तर घटाती है या अभ्यास गतिविधियां सुझाती है।\n"
-                "   - 50% - 79% सटीकता: वर्तमान स्तर पर सुदृढ़ीकरण बनाए रखती है।\n\n"
-                "2. **स्तर 2: सहनशक्ति और पूर्णता अंशांकन (Stamina & Completion Calibration)**:\n"
-                "   - यदि बच्चे की सटीकता उच्च है लेकिन सत्र पूर्णता दर 50% से कम (< 50%) है, तो इंजन स्तर नहीं बढ़ाता बल्कि उसी स्तर पर सहनशक्ति को मजबूत करता है।\n\n"
-                "3. **स्तर 3: के-मीन्स एमएल क्लस्टरिंग (K-Means ML Cohorts)**:\n"
-                "   - गति, सटीकता और पूर्णता दर के आधार पर बच्चों को 4 समूहों (`high_performer`, `steady_learner`, `needs_support`, `curious_explorer`) में समूहित करती है।\n\n"
-                "**नैतिक व विनियामक नियम (PRD §4)**: यह प्रणाली पूर्णतः **गैर-निदानिक (strictly non-diagnostic)** है। यह कभी किसी बच्चे को लेबल या वर्गीकृत नहीं करती, बल्कि केवल सीखने की गति को अनुकूलित करती है।"
-            )
+            if is_stamina_focus:
+                answer = (
+                    "**सहनशक्ति और पूर्णता अंशांकन (Stamina & Completion Calibration - स्तर 2)**:\n\n"
+                    "ChildInsight का इंजन सटीकता के साथ-साथ सत्र पूर्णता दर (Completion Rate) का भी मूल्यांकन करता है। "
+                    "यदि किसी बच्चे की सटीकता उच्च है (>= 80%) लेकिन वे सत्र जल्दी छोड़ देते हैं (पूर्णता दर < 50%), "
+                    "तो इंजन स्तर नहीं बढ़ाता, बल्कि उसी कठिनाई स्तर पर बच्चे का ध्यान और सहनशक्ति मजबूत करता है।"
+                )
+            elif is_difficulty_focus:
+                answer = (
+                    "ChildInsight की **अनुशंसा प्रणाली (Recommendation Engine)** कठिनाई का निर्धारण दो मुख्य चरणों में करती है:\n\n"
+                    "1. **सटीकता सीमाएं (Accuracy Thresholds)**:\n"
+                    "   - **सटीकता >= 80%**: कठिनाई का स्तर आगे बढ़ाती है (Beginner -> Easy -> Medium -> Advanced)।\n"
+                    "   - **सटीकता < 50%**: आत्मविश्वास बढ़ाने के लिए स्तर घटाती है या अभ्यास गतिविधियां सुझाती है।\n"
+                    "   - **सटीकता 50% - 79%**: वर्तमान स्तर पर कौशल सुदृढ़ीकरण (Reinforcement) जारी रखती है।\n\n"
+                    "2. **सहनशक्ति और पूर्णता अंशांकन (Stamina & Completion Calibration)**:\n"
+                    "   - यदि बच्चे की सटीकता 80% या अधिक है लेकिन सत्र पूर्णता दर 50% से कम (< 50%) है (जल्दी बाहर निकलना), "
+                    "तो इंजन स्तर नहीं बढ़ाता, बल्कि उसी स्तर पर बच्चे का ध्यान और सहनशक्ति मजबूत करने की गतिविधि सुझाता है।\n\n"
+                    "**नैतिक व विनियामक नियम (PRD §4)**: यह प्रणाली पूर्णतः **गैर-निदानिक (strictly non-diagnostic)** है और बच्चों को कभी लेबल नहीं करती।"
+                )
+            else:
+                answer = (
+                    "ChildInsight की **अनुशंसा और अनुकूलन प्रणाली (Recommendation Engine)** एक 3-स्तरीय डिज़ाइन पर काम करती है:\n\n"
+                    "1. **स्तर 1: नियम-आधारित श्रेणी सटीकता (Rule-Based Accuracy Thresholds)**:\n"
+                    "   - 80% या अधिक सटीकता (>= 80%): स्तर आगे बढ़ाती है (Beginner -> Easy -> Medium -> Advanced)।\n"
+                    "   - 50% से कम सटीकता (< 50%): मूलभूत समझ मजबूत करने के लिए स्तर घटाती है या अभ्यास गतिविधियां सुझाती है।\n"
+                    "   - 50% - 79% सटीकता: वर्तमान स्तर पर सुदृढ़ीकरण बनाए रखती है।\n\n"
+                    "2. **स्तर 2: सहनशक्ति और पूर्णता अंशांकन (Stamina & Completion Calibration)**:\n"
+                    "   - यदि बच्चे की सटीकता उच्च है लेकिन सत्र पूर्णता दर 50% से कम (< 50%) है, तो इंजन स्तर नहीं बढ़ाता बल्कि उसी स्तर पर सहनशक्ति को मजबूत करता है।\n\n"
+                    "3. **स्तर 3: के-मीन्स एमएल क्लस्टरिंग (K-Means ML Cohorts)**:\n"
+                    "   - गति, सटीकता और पूर्णता दर के आधार पर बच्चों को 4 समूहों (`high_performer`, `steady_learner`, `needs_support`, `curious_explorer`) में समूहित करती है।\n\n"
+                    "**नैतिक व विनियामक नियम (PRD §4)**: यह प्रणाली पूर्णतः **गैर-निदानिक (strictly non-diagnostic)** है। यह कभी किसी बच्चे को लेबल या वर्गीकृत नहीं करती, बल्कि केवल सीखने की गति को अनुकूलित करती है।"
+                )
         else:
-            answer = (
-                "ChildInsight's **Adaptive Recommendation Engine** operates on a proven 3-layer architecture:\n\n"
-                "1. **Layer 1: Category Accuracy Thresholds (Rule-Based)**:\n"
-                "   - Accuracy >= 80%: Level-up progression (Beginner -> Easy -> Medium -> Advanced).\n"
-                "   - Accuracy < 50%: Step-down or foundational practice reinforcement.\n"
-                "   - Accuracy 50% - 79%: Consolidates mastery at the current difficulty.\n\n"
-                "2. **Layer 2: Combined Accuracy & Completion Stamina Calibration**:\n"
-                "   - Evaluates stamina alongside accuracy: if a learner has high accuracy but completion rate is < 50%, the engine reinforces engagement at the current tier before advancing.\n\n"
-                "3. **Layer 3: K-Means ML Clustering (Engagement Cohorts)**:\n"
-                "   - Clusters multi-session behavioral features (accuracy, speed, completion patterns) into 4 cohorts: `high_performer`, `steady_learner`, `needs_support`, and `curious_explorer`.\n\n"
-                "**Ethical Guardrail (PRD §4)**: The engine is **strictly non-diagnostic and educational only**. It never pathologizes or labels children; it purely adapts pedagogical pace and engagement."
-            )
+            if is_stamina_focus:
+                answer = (
+                    "**Stamina & Completion Calibration (Layer 2)**:\n\n"
+                    "ChildInsight's engine evaluates endurance alongside accuracy. If a learner scores high accuracy (>= 80%) "
+                    "but their session completion rate is under 50% (indicating an early exit), the engine holds the current difficulty "
+                    "tier steady rather than advancing. This ensures learners build focus, stamina, and confidence before facing harder challenges."
+                )
+            elif is_difficulty_focus:
+                answer = (
+                    "ChildInsight's **Recommendation Engine** decides difficulty progression through a calibrated 2-stage evaluation:\n\n"
+                    "1. **Category Accuracy Thresholds (Rule-Based)**:\n"
+                    "   - **Accuracy >= 80%**: Recommends level-up progression (e.g. Beginner -> Easy -> Medium -> Advanced) to keep learners engaged and challenged.\n"
+                    "   - **Accuracy < 50%**: Suggests gentle step-down practice at an accessible tier to rebuild confidence and mastery.\n"
+                    "   - **Accuracy 50% - 79%**: Maintains current difficulty to reinforce emerging skills.\n\n"
+                    "2. **Stamina & Completion Calibration**:\n"
+                    "   - Evaluates stamina alongside accuracy: if a learner has high accuracy (>= 80%) but an early-exit completion rate (< 50%), "
+                    "the engine holds the difficulty tier steady to strengthen endurance before advancing.\n\n"
+                    "**Ethical Guardrail (PRD §4)**: The engine is **strictly non-diagnostic and educational only**. It never pathologizes or labels children; it purely adapts pedagogical pace."
+                )
+            else:
+                answer = (
+                    "ChildInsight's **Adaptive Recommendation Engine** operates on a proven 3-layer architecture:\n\n"
+                    "1. **Layer 1: Category Accuracy Thresholds (Rule-Based)**:\n"
+                    "   - Accuracy >= 80%: Level-up progression (Beginner -> Easy -> Medium -> Advanced).\n"
+                    "   - Accuracy < 50%: Step-down or foundational practice reinforcement.\n"
+                    "   - Accuracy 50% - 79%: Consolidates mastery at the current difficulty.\n\n"
+                    "2. **Layer 2: Combined Accuracy & Completion Stamina Calibration**:\n"
+                    "   - Evaluates stamina alongside accuracy: if a learner has high accuracy but completion rate is < 50%, the engine reinforces engagement at the current tier before advancing.\n\n"
+                    "3. **Layer 3: K-Means ML Clustering (Engagement Cohorts)**:\n"
+                    "   - Clusters multi-session behavioral features (accuracy, speed, completion patterns) into 4 cohorts: `high_performer`, `steady_learner`, `needs_support`, and `curious_explorer`.\n\n"
+                    "**Ethical Guardrail (PRD §4)**: The engine is **strictly non-diagnostic and educational only**. It never pathologizes or labels children; it purely adapts pedagogical pace and engagement."
+                )
         relevant_links.append(ADMIN_LINKS['agents_dashboard'])
         relevant_links.append(ADMIN_LINKS['action_center'])
 
     # -------------------------------------------------------------------------
     # D. How-To Guidance (Step-by-Step with Direct Admin Links)
     # -------------------------------------------------------------------------
-    elif any(k in q_lower for k in ['how to', 'how do i', 'how can i', 'steps to', 'where do i']) or any(k in question for k in ['कैसे करें', 'कैसे जोड़ें', 'कैसे बनाएं', 'कहाँ जाऊं']):
+    elif is_howto_query:
         # Teacher assignment how-to
         if any(k in q_lower for k in ['assign', 'teacher', 'student']) or any(k in question for k in ['शिक्षक', 'असाइन']):
             if is_hindi:
@@ -675,6 +888,27 @@ def _generate_grounded_fallback_answer(
                 )
             relevant_links.append(ADMIN_LINKS['new_activity'])
             relevant_links.append(ADMIN_LINKS['activities'])
+
+        # User role modification how-to
+        elif any(k in q_lower for k in ['role', 'change role', 'user role', 'promote']) or any(k in question for k in ['भूमिका', 'रोल']):
+            if is_hindi:
+                answer = (
+                    "**उपयोगकर्ता भूमिका बदलने के चरण:**\n\n"
+                    "1. [उपयोगकर्ता प्रबंधन](/admin/users) पर जाएं।\n"
+                    "2. संबंधित उपयोगकर्ता की पंक्ति खोजें।\n"
+                    "3. भूमिका ड्रॉपडाउन (Parent, Teacher, Admin) में से नई भूमिका चुनें और सहेजें।\n"
+                    "4. यदि किसी को शिक्षक बनाया गया है, तो उन्हें [शिक्षक असाइनमेंट](/admin/assignments) में विद्यार्थी आवंटित करें।"
+                )
+            else:
+                answer = (
+                    "**How to Update a User's Role:**\n\n"
+                    "1. Navigate to [User Management](/admin/users).\n"
+                    "2. Locate the user in the directory table.\n"
+                    "3. Select their new role (Parent, Teacher, or Admin) from the role dropdown and click update.\n"
+                    "4. If promoting someone to Teacher, remember to allocate students via [Teacher Assignments](/admin/assignments)."
+                )
+            relevant_links.append(ADMIN_LINKS['users'])
+            relevant_links.append(ADMIN_LINKS['assignments'])
 
         # Content suggestions & drafts how-to
         elif any(k in q_lower for k in ['suggestion', 'draft', 'review']) or any(k in question for k in ['सुझाव', 'ड्राफ्ट']):
@@ -739,7 +973,7 @@ def _generate_grounded_fallback_answer(
 
             if is_hindi:
                 answer = (
-                    "**हाल के ऑडिट लॉग प्रविष्टियां:**\n\n" +
+                    "**हाल के प्रशासनिक ऑडिट लॉग प्रविष्टियां:**\n\n" +
                     "\n".join(log_lines) +
                     "\n\nपूरा ऑडिट इतिहास देखने के लिए [ऑडिट लॉग](/admin/audit-logs) पर जाएं।"
                 )
@@ -752,7 +986,45 @@ def _generate_grounded_fallback_answer(
         relevant_links.append(ADMIN_LINKS['audit_logs'])
 
     # -------------------------------------------------------------------------
-    # F. "What should I do next?" / Next Actions Query
+    # F. Activity Catalog Structure & Counts Overview
+    # -------------------------------------------------------------------------
+    elif any(k in q_lower for k in [
+        'catalog', 'how many activities', 'activity count', 'total activities', 'catalog structure',
+        'difficulty breakdown', 'how many questions in total', 'catalog breakdown'
+    ]) or any(k in question for k in ['कैटलॉग', 'कुल गतिविधियां', 'कुल प्रश्न']):
+        cat_c = context.get('catalog_counts', {})
+        diff_b = cat_c.get('difficulty_breakdown', {})
+        total_act = cat_c.get('activities', 0)
+        total_q = cat_c.get('questions', 0)
+        num_cats = cat_c.get('categories', len(categories))
+        completed_sess = cat_c.get('completed_sessions', 0)
+
+        if is_hindi:
+            answer = (
+                f"ChildInsight का शिक्षण कैटलॉग वर्तमान में **{num_cats} श्रेणियों** में **{total_act} सक्रिय गतिविधियों** से बना है, "
+                f"जिसमें कुल **{total_q} इंटरैक्टिव प्रश्न** शामिल हैं:\n\n"
+                f"- **शुरुआती (Beginner)**: {diff_b.get('Beginner', 0)} गतिविधियां\n"
+                f"- **सरल (Easy)**: {diff_b.get('Easy', 0)} गतिविधियां\n"
+                f"- **मध्यम (Medium)**: {diff_b.get('Medium', 0)} गतिविधियां\n"
+                f"- **कठिन (Advanced)**: {diff_b.get('Advanced', 0)} गतिविधियां\n"
+                f"- **पूर्ण किए गए सत्र**: {completed_sess}\n\n"
+                f"आप [गतिविधियां प्रबंधित करें](/admin/activities) या [श्रेणियां](/admin/categories) में सामग्री देख सकते हैं।"
+            )
+        else:
+            answer = (
+                f"ChildInsight's educational catalog currently features **{total_act} activities** organized across **{num_cats} categories**, "
+                f"supported by **{total_q} interactive questions** and **{completed_sess} completed learner sessions**:\n\n"
+                f"- **Beginner**: {diff_b.get('Beginner', 0)} activities\n"
+                f"- **Easy**: {diff_b.get('Easy', 0)} activities\n"
+                f"- **Medium**: {diff_b.get('Medium', 0)} activities\n"
+                f"- **Advanced**: {diff_b.get('Advanced', 0)} activities\n\n"
+                f"You can explore and edit the catalog in [Manage Activities](/admin/activities) or organize domains in [Categories](/admin/categories)."
+            )
+        relevant_links.append(ADMIN_LINKS['activities'])
+        relevant_links.append(ADMIN_LINKS['categories'])
+
+    # -------------------------------------------------------------------------
+    # G. "What should I do next?" / Next Actions Query
     # -------------------------------------------------------------------------
     elif any(k in q_lower for k in ['what should i do', 'what to do next', 'what needs attention', 'next steps', 'priorities', 'priority']) or any(k in question for k in ['क्या करूँ', 'आगे क्या', 'प्राथमिकता']):
         action_items = context.get('action_items', [])
@@ -800,7 +1072,7 @@ def _generate_grounded_fallback_answer(
             relevant_links.append(ADMIN_LINKS['action_center'])
 
     # -------------------------------------------------------------------------
-    # G. "Did I make any mistakes?" / Catalog Integrity Questions
+    # H. "Did I make any mistakes?" / Catalog Integrity Questions
     # -------------------------------------------------------------------------
     elif any(k in q_lower for k in ['mistake', 'error', 'integrity', 'wrong', 'broken', 'issue']) or any(k in question for k in ['गलती', 'त्रुटि', 'खराबी', 'कमी']):
         issues = context.get('integrity_issues', [])
@@ -848,7 +1120,7 @@ def _generate_grounded_fallback_answer(
             relevant_links.append(ADMIN_LINKS['categories'])
 
     # -------------------------------------------------------------------------
-    # H. Platform Health / Telemetry Queries
+    # I. Platform Health / Telemetry Queries
     # -------------------------------------------------------------------------
     elif any(k in q_lower for k in ['health', 'score', 'telemetry', 'posture', 'completion rate']) or any(k in question for k in ['स्वास्थ्य', 'स्कोर', 'टेलीमेट्री']):
         hm = context.get('health_metrics', {})
@@ -883,7 +1155,7 @@ def _generate_grounded_fallback_answer(
         relevant_links.append(ADMIN_LINKS['action_center'])
 
     # -------------------------------------------------------------------------
-    # I. Default General Platform Summary
+    # J. Default General Platform Summary
     # -------------------------------------------------------------------------
     else:
         crit = context.get('critical_items_count', 0)

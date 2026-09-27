@@ -85,14 +85,23 @@
 
         <!-- Hindi Translation Section (Optional) -->
         <div style="background: rgba(109, 40, 217, 0.04); border: 1px dashed #A78BFA; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.75rem;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-                <h4 style="margin: 0; font-size: 0.95rem; color: #6D28D9; display: flex; align-items: center; gap: 0.4rem;">
-                    <span>🌐 Hindi Translation</span>
-                </h4>
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                    <h4 style="margin: 0; font-size: 0.95rem; color: #6D28D9; display: flex; align-items: center; gap: 0.4rem;">
+                        <span>🌐 Hindi Translation</span>
+                    </h4>
+                    <button type="button" id="btn-translate-ai" class="btn btn-sm btn-outline" style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; padding: 0.25rem 0.65rem; border-color: #8B5CF6; color: #6D28D9; background: #FAF5FF; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                        <span>✨</span>
+                        <span id="btn-translate-ai-text">Translate with AI</span>
+                    </button>
+                </div>
                 <span class="badge badge-purple" style="font-size: 0.75rem;">Hindi (optional — can be added later)</span>
             </div>
+
+            <div id="translate-ai-feedback" style="display: none; padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.82rem; margin-bottom: 0.85rem;"></div>
+
             <p style="font-size: 0.82rem; color: var(--color-text-muted); margin: 0 0 1rem;">
-                Provide Hindi titles and descriptions. If left blank, this activity will be created as English-only and flagged for follow-up translation.
+                Provide Hindi titles and descriptions. If left blank, this activity will be created as English-only and flagged for follow-up translation. You can click <strong>Translate with AI</strong> to generate a child-appropriate suggestion and edit it freely.
             </p>
 
             <div class="form-group" style="margin-bottom: 1rem;">
@@ -140,4 +149,109 @@
         </div>
     </form>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var translateBtn = document.getElementById('btn-translate-ai');
+    var btnText = document.getElementById('btn-translate-ai-text');
+    var feedbackBox = document.getElementById('translate-ai-feedback');
+    var titleInput = document.getElementById('title');
+    var descInput = document.getElementById('description');
+    var titleHiInput = document.getElementById('title_hi');
+    var descHiInput = document.getElementById('description_hi');
+    var minAgeInput = document.getElementById('min_age');
+    var maxAgeInput = document.getElementById('max_age');
+    var csrfInput = document.querySelector('input[name="csrf_token"]');
+
+    if (!translateBtn) return;
+
+    function showFeedback(message, type) {
+        if (!feedbackBox) return;
+        feedbackBox.style.display = 'block';
+        if (type === 'error') {
+            feedbackBox.style.background = '#FEE2E2';
+            feedbackBox.style.border = '1px solid #FECACA';
+            feedbackBox.style.color = '#991B1B';
+            feedbackBox.innerHTML = '<strong>⚠️ Notice:</strong> ' + message;
+        } else if (type === 'success') {
+            feedbackBox.style.background = '#ECFDF5';
+            feedbackBox.style.border = '1px solid #A7F3D0';
+            feedbackBox.style.color = '#065F46';
+            feedbackBox.innerHTML = '<strong>✓ Translation Ready:</strong> ' + message;
+        } else {
+            feedbackBox.style.background = '#EFF6FF';
+            feedbackBox.style.border = '1px solid #BFDBFE';
+            feedbackBox.style.color = '#1E40AF';
+            feedbackBox.innerHTML = message;
+        }
+    }
+
+    translateBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        var titleVal = titleInput ? titleInput.value.trim() : '';
+        var descVal = descInput ? descInput.value.trim() : '';
+
+        if (!titleVal && !descVal) {
+            showFeedback('Please type an English title or description above before clicking Translate with AI.', 'error');
+            if (titleInput) titleInput.focus();
+            return;
+        }
+
+        var ageBand = null;
+        if (minAgeInput && maxAgeInput && minAgeInput.value && maxAgeInput.value) {
+            ageBand = minAgeInput.value + '-' + maxAgeInput.value;
+        }
+
+        translateBtn.disabled = true;
+        if (btnText) btnText.textContent = 'Translating...';
+        showFeedback('Consulting AI translation model and evaluating child safety compliance...', 'info');
+
+        var csrfToken = csrfInput ? csrfInput.value : '';
+
+        fetch('/admin/forms/translate-ai', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                title: titleVal,
+                description: descVal,
+                context_type: 'activity',
+                age_band: ageBand
+            })
+        })
+        .then(function(res) {
+            return res.json().then(function(data) {
+                return { status: res.status, ok: res.ok, data: data };
+            });
+        })
+        .then(function(result) {
+            translateBtn.disabled = false;
+            if (btnText) btnText.textContent = 'Translate with AI';
+
+            if (result.ok && result.data && result.data.success) {
+                var hiTitle = result.data.title_hi || (result.data.data && result.data.data.title_hi) || '';
+                var hiDesc = result.data.description_hi || (result.data.data && result.data.data.description_hi) || '';
+
+                if (titleHiInput && hiTitle) {
+                    titleHiInput.value = hiTitle;
+                }
+                if (descHiInput && hiDesc) {
+                    descHiInput.value = hiDesc;
+                }
+                showFeedback('Hindi fields auto-filled with age-appropriate suggestion. You can edit them freely before saving.', 'success');
+            } else {
+                var errorMsg = (result.data && result.data.error) ? result.data.error : 'Translation could not be completed.';
+                showFeedback(errorMsg, 'error');
+            }
+        })
+        .catch(function(err) {
+            translateBtn.disabled = false;
+            if (btnText) btnText.textContent = 'Translate with AI';
+            showFeedback('Network error while requesting translation. Please try again.', 'error');
+        });
+    });
+});
+</script>
 {% endblock %}
