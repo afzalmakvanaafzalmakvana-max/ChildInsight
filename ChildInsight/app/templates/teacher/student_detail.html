@@ -108,14 +108,18 @@
             <h3 style="margin-bottom: 0.5rem;">Domain Performance</h3>
             <p style="color: var(--color-text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Average accuracy across educational categories</p>
             <div class="chart-container">
-                <canvas id="categoryChart"></canvas>
+                <canvas id="categoryChart"
+                        data-labels="{{ dash_data.category_labels|tojson|forceescape }}"
+                        data-accuracies="{{ dash_data.category_accuracies|tojson|forceescape }}"></canvas>
             </div>
         </div>
         <div class="card">
             <h3 style="margin-bottom: 0.5rem;">Session Progress Trend</h3>
             <p style="color: var(--color-text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Chronological accuracy trend across completed activities</p>
             <div class="chart-container">
-                <canvas id="trendChart"></canvas>
+                <canvas id="trendChart"
+                        data-labels="{{ dash_data.trend_labels|tojson|forceescape }}"
+                        data-accuracies="{{ dash_data.trend_accuracies|tojson|forceescape }}"></canvas>
             </div>
         </div>
     </div>
