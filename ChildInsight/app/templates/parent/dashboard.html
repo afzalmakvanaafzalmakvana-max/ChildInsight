@@ -147,14 +147,18 @@
                 <h3 style="margin-bottom: 0.5rem;">Domain Performance</h3>
                 <p style="color: var(--color-text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Average accuracy across 5 educational categories</p>
                 <div class="chart-container">
-                    <canvas id="categoryChart"></canvas>
+                    <canvas id="categoryChart"
+                            data-labels="{{ dash_data.category_labels|tojson|forceescape }}"
+                            data-accuracies="{{ dash_data.category_accuracies|tojson|forceescape }}"></canvas>
                 </div>
             </div>
             <div class="card">
                 <h3 style="margin-bottom: 0.5rem;">Session Progress Trend</h3>
                 <p style="color: var(--color-text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Accuracy trend across recent completed sessions</p>
                 <div class="chart-container">
-                    <canvas id="trendChart"></canvas>
+                    <canvas id="trendChart"
+                            data-labels="{{ dash_data.trend_labels|tojson|forceescape }}"
+                            data-accuracies="{{ dash_data.trend_accuracies|tojson|forceescape }}"></canvas>
                 </div>
             </div>
         </div>
@@ -268,13 +272,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // 1. Domain Performance Bar Chart
     const catCtx = document.getElementById('categoryChart');
     if (catCtx && typeof Chart !== 'undefined') {
+        const catLabels = JSON.parse(catCtx.dataset.labels || '[]');
+        const catAccuracies = JSON.parse(catCtx.dataset.accuracies || '[]');
         new Chart(catCtx, {
             type: 'bar',
             data: {
-                labels: {{ dash_data.category_labels|tojson }},
+                labels: catLabels,
                 datasets: [{
                     label: 'Accuracy (%)',
-                    data: {{ dash_data.category_accuracies|tojson }},
+                    data: catAccuracies,
                     backgroundColor: isDark ? 'rgba(59, 130, 246, 0.8)' : 'rgba(47, 111, 237, 0.8)',
                     borderColor: isDark ? '#60A5FA' : '#2F6FED',
                     borderWidth: 1.5,
@@ -319,13 +325,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // 2. Session Progress Trend Line Chart
     const trendCtx = document.getElementById('trendChart');
     if (trendCtx && typeof Chart !== 'undefined') {
+        const trendLabels = JSON.parse(trendCtx.dataset.labels || '[]');
+        const trendAccuracies = JSON.parse(trendCtx.dataset.accuracies || '[]');
         new Chart(trendCtx, {
             type: 'line',
             data: {
-                labels: {{ dash_data.trend_labels|tojson }},
+                labels: trendLabels,
                 datasets: [{
                     label: 'Session Accuracy',
-                    data: {{ dash_data.trend_accuracies|tojson }},
+                    data: trendAccuracies,
                     borderColor: isDark ? '#34D399' : '#10B981',
                     backgroundColor: isDark ? 'rgba(52, 211, 153, 0.15)' : 'rgba(16, 185, 129, 0.12)',
                     tension: 0.35,

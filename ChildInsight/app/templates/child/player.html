@@ -30,20 +30,21 @@
 
         {% if feedback %}
             <!-- Immediate Feedback Display -->
-            <div style="
-                padding: 1.5rem;
-                border-radius: var(--radius-lg);
-                margin-bottom: 1.5rem;
-                background: {% if feedback.is_correct %}#ECFDF5{% else %}#FFFBEB{% endif %};
-                border: 3px solid {% if feedback.is_correct %}#A7F3D0{% else %}#FDE68A{% endif %};
-            ">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">
-                    {% if feedback.is_correct %}🎉{% else %}⭐{% endif %}
-                </div>
-                <h3 style="font-size: 1.35rem; color: {% if feedback.is_correct %}#065F46{% else %}#92400E{% endif %}; margin-bottom: 0.5rem;">
+            {% if feedback.is_correct %}
+            <div style="padding: 1.5rem; border-radius: var(--radius-lg); margin-bottom: 1.5rem; background: #ECFDF5; border: 3px solid #A7F3D0;">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎉</div>
+                <h3 style="font-size: 1.35rem; color: #065F46; margin-bottom: 0.5rem;">
                     {{ feedback.message }}
                 </h3>
             </div>
+            {% else %}
+            <div style="padding: 1.5rem; border-radius: var(--radius-lg); margin-bottom: 1.5rem; background: #FFFBEB; border: 3px solid #FDE68A;">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">⭐</div>
+                <h3 style="font-size: 1.35rem; color: #92400E; margin-bottom: 0.5rem;">
+                    {{ feedback.message }}
+                </h3>
+            </div>
+            {% endif %}
 
             <div style="margin-top: 1rem;">
                 {% if feedback.is_last %}
