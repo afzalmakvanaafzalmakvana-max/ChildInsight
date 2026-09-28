@@ -57,9 +57,16 @@ python -m flask --app run.py db upgrade
 ### 5. Seed Demo Data
 Pre-load a complete educational environment with 5 categories, 115 interactive activities, 415 questions, demo users across all roles, 3 children, 18 realistic activity sessions, trained K-Means pattern clustering, and tailored recommendations:
 ```bash
+# Standard idempotent seed / verification:
 python -m flask --app run.py seed-demo
+
+# Optional: clean and purge any legacy .local accounts before seeding:
+python -m flask --app run.py seed-demo --clean
+
+# Optional: full wipe of existing demo sessions/children and fresh reseed:
+python -m flask --app run.py seed-demo --fresh
 ```
-*(All seeded demo entities are clearly marked with a `Demo Data` badge throughout the parent, teacher, and child user interfaces).*
+*(All seeded demo entities are clearly marked with a `Demo Data` badge throughout the parent, teacher, and child user interfaces. The `--clean` flag ensures any legacy `.local` accounts from earlier database versions are purged in favor of current `.demo` credentials).*
 
 ### 6. Run the Development Server
 ```bash

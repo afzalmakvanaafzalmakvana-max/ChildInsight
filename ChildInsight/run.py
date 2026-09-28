@@ -45,17 +45,22 @@ def seed_activities_cmd():
     click.echo(f"Seeded {cats} categories, {acts} activities, and {quests} questions successfully.")
 
 
-def run_seed_demo(fresh: bool = False):
+def run_seed_demo(fresh: bool = False, clean: bool = False):
     """Core logic to seed/verify demo dataset with clear output logging."""
     from app.utils.seed_data import seed_demo_data
     db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', 'Unknown')
     click.echo("==================================================")
     click.echo(f"Database Target: {db_uri}")
-    click.echo(f"Mode: {'Fresh reseed' if fresh else 'Idempotent verify & seed'}")
+    mode_str = 'Fresh reseed' if fresh else ('Clean legacy + verify & seed' if clean else 'Idempotent verify & seed')
+    click.echo(f"Mode: {mode_str}")
     click.echo("Seeding demo dataset (activities, users, children, sessions, recommendations)...")
-    res = seed_demo_data(fresh=fresh)
+    res = seed_demo_data(fresh=fresh, clean=clean)
     click.echo("==================================================")
     click.echo("Demo Data Environment Ready!")
+    if res.get('cleaned_legacy_users'):
+        click.secho(f"  Legacy Cleanup:  Removed {len(res['cleaned_legacy_users'])} legacy .local account(s): {', '.join(res['cleaned_legacy_users'])}", fg='green')
+    if res.get('legacy_warning'):
+        click.secho(f"  Legacy Warning:  {res['legacy_warning']}", fg='yellow', bold=True)
     click.echo(f"  Users in DB:     {res['users_after']} total (before: {res['users_before']}, new: +{res['created_users']})")
     click.echo(f"  Categories:      {res['total_categories']} available ({res['created_categories']} newly created)")
     click.echo(f"  Activities:      {res['total_activities']} interactive activities ({res['created_activities']} newly created)")
@@ -79,23 +84,26 @@ def run_seed_demo(fresh: bool = False):
 
 @app.cli.command('seed-demo')
 @click.option('--fresh', is_flag=True, default=False, help='Wipe existing demo sessions/children before reseeding')
-def seed_demo_cmd(fresh=False):
+@click.option('--clean', is_flag=True, default=False, help='Purge legacy .local accounts before seeding')
+def seed_demo_cmd(fresh=False, clean=False):
     """CLI utility to seed a complete demo environment with users, children, sessions, and recommendations."""
-    run_seed_demo(fresh=fresh)
+    run_seed_demo(fresh=fresh, clean=clean)
 
 
 @app.cli.command('seed-demo-data')
 @click.option('--fresh', is_flag=True, default=False, help='Wipe existing demo sessions/children before reseeding')
-def seed_demo_data_cmd(fresh=False):
+@click.option('--clean', is_flag=True, default=False, help='Purge legacy .local accounts before seeding')
+def seed_demo_data_cmd(fresh=False, clean=False):
     """Alias for seed-demo."""
-    run_seed_demo(fresh=fresh)
+    run_seed_demo(fresh=fresh, clean=clean)
 
 
 if __name__ == '__main__':
     import sys
     if len(sys.argv) > 1 and sys.argv[1] in ('seed-demo', 'seed-demo-data'):
         fresh_flag = '--fresh' in sys.argv
+        clean_flag = '--clean' in sys.argv
         with app.app_context():
-            run_seed_demo(fresh=fresh_flag)
+            run_seed_demo(fresh=fresh_flag, clean=clean_flag)
     else:
         app.run(host='127.0.0.1', port=5000)

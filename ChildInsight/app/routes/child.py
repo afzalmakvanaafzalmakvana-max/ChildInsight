@@ -11,6 +11,18 @@ from app.translations import normalize_language, translate
 child_bp = Blueprint('child', __name__)
 
 
+@child_bp.after_request
+def add_cache_control_headers(response):
+    """
+    Prevent browser from serving stale cached question forms via bfcache (Back/Forward cache).
+    Ensures that hitting Back after activity completion forces a fresh server check.
+    """
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+
 def get_authorized_child(child_id):
     """Enforce that only the child (or their parent/admin) can access their activity space."""
     child = db.session.get(Child, child_id)
@@ -150,6 +162,17 @@ def player(child_id, activity_id):
 
     # Initialize or resume session and play state
     state = session.get('play_state', {})
+    if q_idx != 0 and (state.get('activity_id') != activity.id or state.get('child_id') != child.id):
+        # Navigated to q_idx > 0 without active play_state (e.g. back button after completion)
+        latest_session = ActivitySession.query.filter_by(
+            child_id=child.id,
+            activity_id=activity.id
+        ).order_by(ActivitySession.id.desc()).first()
+        if latest_session and latest_session.status == ActivitySession.STATUS_COMPLETED:
+            flash(translate('activity_already_finished', lang=child_lang, default='This activity is already finished! Here are your results.'), 'info')
+            return redirect(url_for('child.results', child_id=child.id, activity_id=activity.id))
+        return redirect(url_for('child.player', child_id=child.id, activity_id=activity.id, q=0))
+
     if q_idx == 0 or state.get('activity_id') != activity.id or state.get('child_id') != child.id:
         act_session = event_tracker.start_session(child_id=child.id, activity_id=activity.id)
         state = {
@@ -165,6 +188,15 @@ def player(child_id, activity_id):
         session_id = state.get('session_id')
         act_session = db.session.get(ActivitySession, session_id) if session_id else None
         if not act_session or act_session.status != ActivitySession.STATUS_IN_PROGRESS:
+            # Check if this activity was already completed and child navigated back
+            latest_session = ActivitySession.query.filter_by(
+                child_id=child.id,
+                activity_id=activity.id
+            ).order_by(ActivitySession.id.desc()).first()
+            if latest_session and latest_session.status == ActivitySession.STATUS_COMPLETED:
+                flash(translate('activity_already_finished', lang=child_lang, default='This activity is already finished! Here are your results.'), 'info')
+                return redirect(url_for('child.results', child_id=child.id, activity_id=activity.id))
+
             act_session = event_tracker.start_session(child_id=child.id, activity_id=activity.id)
             state['session_id'] = act_session.id
             session['play_state'] = state
@@ -194,6 +226,7 @@ def player(child_id, activity_id):
         q_idx=q_idx,
         total_q=len(questions),
         feedback=None,
+        session_id=act_session.id if act_session else None,
         child_lang=child_lang
     )
 
@@ -212,29 +245,71 @@ def answer(child_id, activity_id):
     question_id = request.form.get('question_id', type=int)
     selected_answer = request.form.get('selected_answer', '').strip()
     q_idx = request.form.get('q_idx', default=0, type=int)
+    form_session_id = request.form.get('session_id', type=int)
+
+    questions = activity.questions.order_by(ActivityQuestion.order_num).all()
+    total_q = len(questions)
+
+    # Detect if question index is out of bounds for this activity/session
+    if not questions or (q_idx is not None and q_idx >= total_q):
+        flash(translate('activity_already_finished', lang=child_lang, default='This activity is already finished! Here are your results.'), 'info')
+        return redirect(url_for('child.results', child_id=child.id, activity_id=activity.id))
+
+    # Detect if session has already been marked 'completed'
+    state = session.get('play_state', {})
+    state_session_id = state.get('session_id') if isinstance(state, dict) else None
+
+    act_session = None
+    target_id = form_session_id or state_session_id
+    if target_id:
+        candidate = db.session.get(ActivitySession, target_id)
+        if candidate and candidate.child_id == child.id and candidate.activity_id == activity.id:
+            if candidate.status == ActivitySession.STATUS_COMPLETED:
+                flash(translate('activity_already_finished', lang=child_lang, default='This activity is already finished! Here are your results.'), 'info')
+                return redirect(url_for('child.results', child_id=child.id, activity_id=activity.id))
+            act_session = candidate
+
+    if not act_session:
+        act_session = ActivitySession.query.filter_by(
+            child_id=child.id,
+            activity_id=activity.id,
+            status=ActivitySession.STATUS_IN_PROGRESS
+        ).order_by(ActivitySession.id.desc()).first()
+
+    if not act_session:
+        # Check if the most recent session was already completed
+        latest_session = ActivitySession.query.filter_by(
+            child_id=child.id,
+            activity_id=activity.id
+        ).order_by(ActivitySession.id.desc()).first()
+        if latest_session and latest_session.status == ActivitySession.STATUS_COMPLETED:
+            flash(translate('activity_already_finished', lang=child_lang, default='This activity is already finished! Here are your results.'), 'info')
+            return redirect(url_for('child.results', child_id=child.id, activity_id=activity.id))
+
+    if act_session:
+        if act_session.status == ActivitySession.STATUS_COMPLETED:
+            flash(translate('activity_already_finished', lang=child_lang, default='This activity is already finished! Here are your results.'), 'info')
+            return redirect(url_for('child.results', child_id=child.id, activity_id=activity.id))
+        if act_session.attempts >= total_q:
+            event_tracker.complete_session(session_id=act_session.id, child_id=child.id)
+            flash(translate('activity_already_finished', lang=child_lang, default='This activity is already finished! Here are your results.'), 'info')
+            return redirect(url_for('child.results', child_id=child.id, activity_id=activity.id))
 
     # Server-side input validation per rules.md §4
-    if not question_id or question_id <= 0 or not selected_answer or len(selected_answer) > 255 or q_idx < 0:
+    if not question_id or question_id <= 0 or not selected_answer or len(selected_answer) > 255 or (q_idx is not None and q_idx < 0):
         abort(400)
 
     question = db.session.get(ActivityQuestion, question_id)
     if not question or question.activity_id != activity.id:
         abort(400)
 
-    questions = activity.questions.order_by(ActivityQuestion.order_num).all()
-    state = session.get('play_state', {})
-    session_id = state.get('session_id')
+    if not act_session:
+        act_session = event_tracker.start_session(child_id=child.id, activity_id=activity.id)
 
-    if not session_id:
-        act_session = ActivitySession.query.filter_by(
-            child_id=child.id,
-            activity_id=activity.id,
-            status=ActivitySession.STATUS_IN_PROGRESS
-        ).order_by(ActivitySession.id.desc()).first()
-        if not act_session:
-            act_session = event_tracker.start_session(child_id=child.id, activity_id=activity.id)
-        session_id = act_session.id
-        state['session_id'] = session_id
+    session_id = act_session.id
+    if not isinstance(state, dict):
+        state = {}
+    state['session_id'] = session_id
 
     expected_ans = question.get_correct_answer(child_lang).strip()
     is_correct = (
@@ -281,6 +356,7 @@ def answer(child_id, activity_id):
         q_idx=q_idx,
         total_q=len(questions),
         feedback=feedback,
+        session_id=act_session.id if act_session else None,
         child_lang=child_lang
     )
 
@@ -323,23 +399,49 @@ def skip(child_id, activity_id):
     if not activity:
         abort(404)
 
+    child_lang = getattr(g, 'child_lang', 'en')
     question_id = request.form.get('question_id', type=int)
     q_idx = request.form.get('q_idx', default=0, type=int)
+    form_session_id = request.form.get('session_id', type=int)
 
-    if not question_id or question_id <= 0 or q_idx < 0:
+    questions_count = activity.questions.count()
+    if q_idx is not None and q_idx >= questions_count:
+        flash(translate('activity_already_finished', lang=child_lang, default='This activity is already finished! Here are your results.'), 'info')
+        return redirect(url_for('child.results', child_id=child.id, activity_id=activity.id))
+
+    # Check if session is already completed
+    state = session.get('play_state', {})
+    state_session_id = state.get('session_id') if isinstance(state, dict) else None
+    target_id = form_session_id or state_session_id
+    if target_id:
+        candidate = db.session.get(ActivitySession, target_id)
+        if candidate and candidate.child_id == child.id and candidate.activity_id == activity.id:
+            if candidate.status == ActivitySession.STATUS_COMPLETED:
+                flash(translate('activity_already_finished', lang=child_lang, default='This activity is already finished! Here are your results.'), 'info')
+                return redirect(url_for('child.results', child_id=child.id, activity_id=activity.id))
+    else:
+        latest_session = ActivitySession.query.filter_by(
+            child_id=child.id,
+            activity_id=activity.id
+        ).order_by(ActivitySession.id.desc()).first()
+        if latest_session and latest_session.status == ActivitySession.STATUS_COMPLETED:
+            flash(translate('activity_already_finished', lang=child_lang, default='This activity is already finished! Here are your results.'), 'info')
+            return redirect(url_for('child.results', child_id=child.id, activity_id=activity.id))
+
+    if not question_id or question_id <= 0 or (q_idx is not None and q_idx < 0):
         abort(400)
 
     question = db.session.get(ActivityQuestion, question_id)
     if not question or question.activity_id != activity.id:
         abort(400)
 
-    state = session.get('play_state', {})
-    session_id = state.get('session_id')
+    session_id = state_session_id or form_session_id
     if session_id and question_id:
         event_tracker.log_question_skipped(session_id=session_id, child_id=child.id, question_id=question_id)
 
-    questions_count = activity.questions.count()
     next_q = q_idx + 1
+    if not isinstance(state, dict):
+        state = {}
     state['current_q'] = next_q
     session['play_state'] = state
 
@@ -358,7 +460,7 @@ def abandon(child_id, activity_id):
         abort(404)
 
     state = session.pop('play_state', {})
-    session_id = state.get('session_id')
+    session_id = state.get('session_id') if isinstance(state, dict) else None
     if not session_id:
         act_session = ActivitySession.query.filter_by(
             child_id=child.id,
@@ -374,6 +476,7 @@ def abandon(child_id, activity_id):
     return redirect(url_for('child.activity_list', child_id=child.id, category_id=activity.category_id))
 
 
+@child_bp.route('/<int:child_id>/activity/<int:activity_id>/results')
 @child_bp.route('/<int:child_id>/play/<int:activity_id>/results')
 @login_required
 def results(child_id, activity_id):
@@ -384,7 +487,7 @@ def results(child_id, activity_id):
         abort(404)
 
     state = session.pop('play_state', {})
-    session_id = state.get('session_id')
+    session_id = state.get('session_id') if isinstance(state, dict) else None
     if not session_id:
         act_session = ActivitySession.query.filter_by(
             child_id=child.id,
@@ -399,8 +502,17 @@ def results(child_id, activity_id):
         score = act_session.correct_answers
         total_q = act_session.attempts if act_session.attempts > 0 else activity.questions.count()
     else:
-        score = state.get('score', 0)
-        total_q = state.get('total_q', activity.questions.count() or 3)
+        latest_session = ActivitySession.query.filter_by(
+            child_id=child.id,
+            activity_id=activity.id,
+            status=ActivitySession.STATUS_COMPLETED
+        ).order_by(ActivitySession.id.desc()).first()
+        if latest_session:
+            score = latest_session.correct_answers
+            total_q = latest_session.attempts if latest_session.attempts > 0 else activity.questions.count()
+        else:
+            score = state.get('score', 0) if isinstance(state, dict) else 0
+            total_q = (state.get('total_q') if isinstance(state, dict) else None) or activity.questions.count() or 3
 
     child_lang = getattr(g, 'child_lang', 'en')
     return render_template(

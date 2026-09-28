@@ -60,6 +60,7 @@ TRANSLATIONS = {
     'results_all_correct': 'Superstar! You answered all the questions correctly! 🎉',
     'results_good_effort': 'Wonderful effort! Every game helps your mind grow stronger! 🚀',
     'results_great_try': 'Great try! Exploring new activities is how we learn! 🌱',
+    'activity_already_finished': 'This activity is already finished! Here are your results.',
 
     # Empty State & Fallbacks
     'no_activities_age': 'No activities for this age yet',

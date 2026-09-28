@@ -60,6 +60,7 @@ TRANSLATIONS = {
     'results_all_correct': 'सुपरस्टार! आपने सभी प्रश्नों के सही उत्तर दिए! 🎉',
     'results_good_effort': 'शानदार प्रयास! हर खेल आपके दिमाग को मजबूत बनाता है! 🚀',
     'results_great_try': 'अच्छा प्रयास! नई गतिविधियों को तलाशना ही सीखने का तरीका है! 🌱',
+    'activity_already_finished': 'यह गतिविधि पहले ही पूरी हो चुकी है! यहाँ आपके परिणाम हैं।',
 
     # Empty State & Fallbacks
     'no_activities_age': 'इस उम्र के लिए अभी कोई गतिविधि नहीं है',

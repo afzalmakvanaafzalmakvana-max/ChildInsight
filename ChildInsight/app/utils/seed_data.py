@@ -13,7 +13,9 @@ def seed_activities():
     created_questions = 0
 
     for cat_data in SEED_CATEGORIES:
-        category = Category.query.filter_by(slug=cat_data['slug']).first()
+        category = Category.query.filter(
+            (Category.slug == cat_data['slug']) | (Category.name == cat_data['name'])
+        ).first()
         if not category:
             category = Category(
                 name=cat_data['name'],
@@ -130,14 +132,16 @@ def seed_activities():
     return created_categories, created_activities, created_questions
 
 
-def seed_demo_data(fresh: bool = False):
+def seed_demo_data(fresh: bool = False, clean: bool = False):
     """
     Comprehensive demo seed for evaluation, testing, and immediate demonstration.
     Loads clearly-labelled 'Demo Data' for activities, user accounts (admin, teacher, parent),
     learners, educator assignments, and realistic completed sessions.
     Guarantees demo accounts have password 'DemoPass123!' and active status.
     Trains the initial K-Means pattern grouping model and generates explainable recommendations.
+    Provides --clean support to detect and safely remove legacy .local accounts.
     """
+    import logging
     from datetime import datetime, timezone, timedelta
     from app.models.user import User
     from app.models.child import Child
@@ -145,6 +149,35 @@ def seed_demo_data(fresh: bool = False):
     from app.models.session import ActivitySession, InteractionEvent
     from app.services import recommendation_service
     from app.ml.model_manager import get_model_manager
+
+    # 0. Check for legacy .local accounts and clean or warn
+    legacy_users = User.query.filter(User.email.like('%.local')).all()
+    cleaned_legacy_users = []
+    legacy_warning = None
+
+    if legacy_users:
+        if clean or fresh:
+            from app.models.child_teacher_access import ChildTeacherAccess
+            from app.models.notification import Notification
+            from app.models.password_reset_token import PasswordResetToken
+            for lu in legacy_users:
+                cleaned_legacy_users.append(lu.email)
+                ChildTeacherAccess.query.filter(
+                    (ChildTeacherAccess.requested_by_parent_id == lu.id) |
+                    (ChildTeacherAccess.teacher_id == lu.id)
+                ).delete(synchronize_session=False)
+                Notification.query.filter_by(user_id=lu.id).delete(synchronize_session=False)
+                PasswordResetToken.query.filter_by(user_id=lu.id).delete(synchronize_session=False)
+                db.session.delete(lu)
+            db.session.commit()
+        else:
+            emails_str = ', '.join(u.email for u in legacy_users)
+            legacy_warning = (
+                f"Found {len(legacy_users)} legacy .local account(s) in database ({emails_str}). "
+                f"These legacy accounts may cause confusion with official .demo credentials. "
+                f"Run with --clean flag to remove them: flask seed-demo --clean"
+            )
+            logging.warning(legacy_warning)
 
     users_before = User.query.count()
 
@@ -397,6 +430,9 @@ def seed_demo_data(fresh: bool = False):
         'created_sessions': created_sessions,
         'total_sessions': ActivitySession.query.count(),
         'demo_sessions': demo_sessions_count,
+        'legacy_warning': legacy_warning,
+        'legacy_users_found': [u.email for u in legacy_users] if not (clean or fresh) else [],
+        'cleaned_legacy_users': cleaned_legacy_users,
         # Backward compatibility aliases
         'users': created_users,
         'children': created_children,
